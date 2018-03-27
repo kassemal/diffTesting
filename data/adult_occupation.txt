@@ -1,0 +1,16 @@
+Tech-support;Technical;Physical;*
+Craft-repair;Technical;Physical;*
+Other-service;*
+Sales;Non-responsable;Non-physical;*
+Exec-managerial;Responsable;Non-physical;*
+Prof-specialty;Responsable;Non-physical;*
+Handlers-cleaners;Hardwork;Physical;*
+Machine-op-inspct;Technical;Physical;*
+Adm-clerical;Non-responsable;Non-physical;*
+Farming-fishing;Hardwork;Physical;*
+Transport-moving;Hardwork;Physical;*
+Priv-house-serv;Hardwork;Physical;*
+Protective-serv;Non-responsable;Non-physical;*
+Armed-Forces;Hardwork;Physical;*
+
+

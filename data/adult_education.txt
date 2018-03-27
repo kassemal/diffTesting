@@ -1,0 +1,16 @@
+Bachelors;Undergrad;University;*
+Some-college;Undergrad;University;*
+11th;11th-12th;Senior-sec;Secondary;School;*
+HS-grad;Senior-sec;Secondary;School;*
+Prof-school;Professional;University;*
+Assoc-acdm;Assoc;Professional;University;*                
+Assoc-voc;Assoc;Professional;University;*
+9th;Junior-sec;Secondary;School;* 
+7th-8th;Junior-sec;Secondary;School;* 
+12th;11th-12th;Senior-sec;Secondary;School;*
+Masters;Grad-scool;University;*
+1st-4th;0th-4th;Primary;School;* 
+10th;Senior-sec;Secondary;School;*
+Doctorate;Grad-scool;University;*
+5th-6th;Primary;School;* 
+Preschool;0th-4th;Primary;School;*
