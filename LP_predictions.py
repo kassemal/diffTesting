@@ -124,8 +124,8 @@ if __name__ == '__main__':
 						r_temp.append(max(hist[p]/hist_wo[p], hist_wo[p]/hist[p]))
 				ratio.append(max(r_temp))
 				#plot the histograms and save the related figure into a file. This is just to examine the shape of the histograms 
-				filename = 'results/figures/hist_ratio/%s/S%d/N%d/Ep%s/hist_%s_S%d_N%d_Ep%s_r%d.pdf'%(Name,Size,NB_Iterations,str(eps),Name,Size,NB_Iterations,str(eps),i+1)
-				plot_hist(hist, hist_wo, bin_edges, filename)
+				#filename = 'results/figures/hist_ratio/%s/S%d/N%d/Ep%s/hist_%s_S%d_N%d_Ep%s_r%d.pdf'%(Name,Size,NB_Iterations,str(eps),Name,Size,NB_Iterations,str(eps),i+1)
+				#plot_hist(hist, hist_wo, bin_edges, filename)
 		#append ratio list to an overall list for all epsilons
 		ratio_all_eps.append(ratio)
 	#write the ratios into a file (a line per epsilon value). This is just to keep a copy of the data
@@ -153,11 +153,12 @@ if __name__ == '__main__':
 	plt.xlabel('Ratio', fontsize=14)
 	plt.ylabel('Cumulative Relative Frequency',fontsize=14)  
 	#plt.title('')
-	fig = plt.gcf()
+	#fig = plt.gcf()
 	filename = 'results/figures/cdf/%s/cdf_DP_%s_S%d_N%d.pdf'%(Name,Name,Size,NB_Iterations)
 	create_file(filename)
 	fig.savefig(filename, bbox_inches='tight')
 	print 'Done!'
 	plt.show()
+	plt.close(fig)
 
 
