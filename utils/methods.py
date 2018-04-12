@@ -116,7 +116,7 @@ def compute_counts(data, qi_num, sa_num): #cij
     counts = dict()     
     indices = []
     for i in range(len(data)): 
-        if i in indices: #skip records that are identical to already considered ones
+        if i in indices: #skip records that are identical to the already considered ones
             continue
         counter = 0
         for j in range(len(data)):

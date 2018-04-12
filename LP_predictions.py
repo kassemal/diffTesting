@@ -16,7 +16,7 @@ More precisely, it does the following:
 	  then obtain from all the noised values a distribution hist_with_r
 	- remove the current record and repeat the previous step in order to obtain a distribution hist_without_r
 	- obtain the maximal ratio between the frequencies of the two histograms, considered point-wisely. 
-3- Plot the cumulative relative frequency for all epsilon values in one graph
+3- Plot the ratios cumulative relative frequency for all epsilon values in one graph
 """
 #
 # !/usr/bin/env python
@@ -80,9 +80,9 @@ SA_ATT = ['income_level'] #sensitive attributes
 Name = 'adult' #name of the dataset
 Size = 1000 #size of the dataset to consider
 Select = True #True is to select new data
-Epsilons = [0.01, 0.1, 0.25, 1.0, 2.0] #values of epsilon to consider
-color_list = {0.01:'b', 0.1:'y', 0.25: 'r', 1.0:'g', 2.0:'c'}  
-NB_Iterations = 10000 #number of noised values to compute per record
+Epsilons = [0.01, 0.05, 0.1, 0.25] #values of epsilon to consider
+color_list = {0.01:'b', 0.1:'y', 0.25: 'r', 0.05:'g', 2.0:'c'}  
+NB_Iterations = 100000 #number of noised values to compute per record
 #
 if __name__ == '__main__':
 	
@@ -153,8 +153,8 @@ if __name__ == '__main__':
 	plt.xlabel('Ratio', fontsize=14)
 	plt.ylabel('Cumulative Relative Frequency',fontsize=14)  
 	#plt.title('')
-	#fig = plt.gcf()
-	filename = 'results/figures/cdf/%s/cdf_DP_%s_S%d_N%d.pdf'%(Name,Name,Size,NB_Iterations)
+	fig = plt.gcf()
+	filename = 'results/figures/cdf/%s/conditional/cdf_LB_%s_S%d_N%d.pdf'%(Name,Name,Size,NB_Iterations)
 	create_file(filename)
 	fig.savefig(filename, bbox_inches='tight')
 	print 'Done!'
