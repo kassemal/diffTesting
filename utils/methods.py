@@ -1,32 +1,33 @@
 """
-This file contains methods related to read, write, manipulate and perform counts on datasets/tables. 
+Methods related to data reading, data writing, data manipulation, and computations.   
 """
 
 
 # !/usr/bin/env python
 # coding=utf-8
 from pulp import *
-import random 
+import numpy as np
 import random
 #
 import adult_data
+import internet_data
 
 
-def attributes_filter(dataset, att_names):
+def attributes_filter(dataset, attributes, att_names):
     """
     Pick up from $dataset only the attributes whose names are in $att_names. 
-    Note that, this method assumes that $dataset contains all the attributes from $name_data.ATT_NAMES
+    Note that, this method assumes that $dataset contains all the attributes from ($name)_data.ATT_NAMES
     """
     #obtain attribute indices
     att_indices = []
-    for name in att_names:
-        att_indices.append(adult_data.ATT_NAMES.index(name))
+    for att in attributes:
+        att_indices.append(att_names.index(att))
     #obtain related columns 
     res_dataset = []
     for record in dataset:
         temp = []
-        for i in att_indices:
-            temp.append(record[i])
+        for j in att_indices:
+            temp.append(record[j])
         res_dataset.append(temp)
     return res_dataset
 
@@ -49,7 +50,7 @@ def records_select(dataset, size):
     return selected_dataset
 
 
-def data_import(is_select_new, name='adult', size=1000, qi_list=['occupation'], sa='income_level', filename='results/selected_data'):
+def data_import(is_select_new, name, size, qi_list, sa, filename):
     """
     Import a dataset from a file: 
     either read already prepared data from $filename if $is_select_new=False, or 
@@ -59,11 +60,15 @@ def data_import(is_select_new, name='adult', size=1000, qi_list=['occupation'], 
     if is_select_new == True:#select new data
         if name == 'adult':
             dataset = adult_data.read() #get full Adult dataset
+            att_names = adult_data.ATT_NAMES
+        elif name == 'internet':
+            dataset = internet_data.read() #get full Internet Usage dataset
+            att_names = internet_data.ATT_NAMES
         else:
             print 'The dataset "%s" doesn\'t exist!'%name
             return []
         #pick up $qi_list+$sa attributes
-        dataset = attributes_filter(dataset, qi_list + [sa]) 
+        dataset = attributes_filter(dataset, qi_list + [sa], att_names) 
         #select $size records
         dataset = records_select(dataset, size)
         #write selected data into a file
@@ -73,12 +78,15 @@ def data_import(is_select_new, name='adult', size=1000, qi_list=['occupation'], 
         data_file = open(filename, 'r')
         for line in data_file:
             line = line.strip()
-            line = line.split(' ')
+            line = line.split(' ') #assume that attributes are separated through 'spaces'
             dataset.append(line)
     return dataset
 
 
 def data_quantize(dataset, att_indices, quantiles):
+    """
+    Quantize attributes whose indices are inside $att_indices, according to $quantiles
+    """
     for i in range(len(dataset)):
         for j, index in enumerate(att_indices):
             val = None
@@ -89,53 +97,75 @@ def data_quantize(dataset, att_indices, quantiles):
                 print 'The value %s of the attribute with index %d doesn\'t belong to any interval!'%(dataset[i][index],index)
             else:
                 dataset[i][index] = '%s'%val
-    return None
+    return 
 
 
-def att_values_get(dataset, index=-1):
+# def att_values_get(dataset):
+#     """
+#     Take a table $dataset and return all the possible values for every attribute (column) 
+#     """
+#     if len(dataset) != 0:
+#         att_values = [[] for j in range(len(dataset[0]))]
+#         for row in dataset:
+#             for j in range(len(dataset[0])):
+#                 if row[j] not in att_values[j]:
+#                     att_values[j].append(row[j])
+#         return att_values
+#     else:
+#         return []
+
+
+def counts_compute(dataset): 
     """
-    Take a table $dataset and return all the possible value of the attribute with index $index. 
+    Input: $dataset, a list of lists [[]]. 
+    refer to last column as sensitive attribute (SA), 
+    and refer for other columns as quasi-identifier attributes (QI)
+
+    For every pair (val_qi, val_sa) compute the related count: the number of 
+    records (rows) that contains this pair, where val_qi is a QI value and val_sa is a SA value. 
+    -- do this for every quasi-identifier quasi-identifier attribute --
+
+    Output: a list of dictionaries of dictionaries: [{{}}] if $dataset is not empty, 
+            and empty list [] otherwise. 
+
+    e.g: counts_compute([
+                         ['a', 'm', 's1'],
+                         ['a', 'n', 's2'],
+                         ['b', 'm', 's1'],
+                         ['a', 'm', 's2']
+                        ])
+         return [
+                 {'a': {'s2': 2, 's1': 1}, 'b': {'s2': 0, 's1': 1}}, 
+                 {'m': {'s2': 1, 's1': 2}, 'n': {'s2': 1, 's1': 0}}
+                ]
     """
-    att_values = []
-    if len(dataset) == 0:
-        return att_values
+    if len(dataset) != 0: #if dataset is not empty
+
+        #obtain possible attributes' values 
+        att_values = []
+        for j in range(len(dataset[0])):
+            att_values.append(list(set([record[j] for record in dataset])))
+        #obtain counts 
+        counts = []
+        #initialize all counts to zero
+        for j in range(len(dataset[0])-1):
+            counts.append({val_qi:{val_sa:0 for val_sa in att_values[-1]} for val_qi in att_values[j]})
+        #compute counts
+        for record in dataset:
+            for j, val_qi in enumerate(record[:-1]):
+                counts[j][val_qi][record[-1]] += 1
+        return counts, att_values[-1]
     else:
-        for row in dataset:
-            if row[index] not in att_values:
-                att_values.append(row[index])
-        return att_values
+        return []
 
 
-def qi_concatenate(dataset, qi_num=-1):
-    """ 
-    Take a $dataset and concatenate first $qi_num attribute values.
-    Consider only distinct records. 
-    """
-    qi_concatenation = []
-    for row in dataset:
-        qi = ','.join(str(x) for x in row[0:qi_num])
-        if qi not in qi_concatenation:
-            qi_concatenation.append(qi)
-    return qi_concatenation
-
-
-def counts_compute(dataset, qi_num=-1, sa_index=-1): 
-    """
-    For every distinct pair (q, s) in $dataset, compute the number of records for which the 
-    quasi-identifier(s) tuple (first $qi_num attributes) is equal to q and the sensitive value(s) 
-    tuple (last $sa_num attributes) is equal to s.
-    """
-    qi_concatenation = qi_concatenate(dataset)
-    sa_values = att_values_get(dataset, sa_index)
-    counts = dict()  
-    for q in qi_concatenation:
-        for s in sa_values:
-            counts[q + ';' + s] = 0
-    #
-    for i in range(len(dataset)):
-        key = ','.join(str(x) for x in dataset[i][0:qi_num]) + ';' + ','.join(str(x) for x in dataset[i][qi_num:])
-        counts[key] += 1
-    return counts
+def add_noise(counts, epsilon): 
+    """ add noise to counts"""
+    counts_noised = [dict() for x in range(len(counts))]
+    for j in range(len(counts)):
+        for key, value in counts[j].iteritems():
+            counts_noised[j][key] = value + np.random.laplace(loc=0.0, scale=1.0/epsilon)
+    return counts_noised
 
 
 def file_create(filename):
@@ -151,7 +181,7 @@ def file_create(filename):
             except OSError as exc: # Guard against race condition
                 if exc.errno != errno.EEXIST:
                     raise
-    return None
+    return 
 
 
 def table_write(table,  filename):
@@ -164,5 +194,5 @@ def table_write(table,  filename):
     for line in table:
         f.write(' '.join(str(x) for x in line) + '\n')
     f.close()
-    return None
+    return 
     
