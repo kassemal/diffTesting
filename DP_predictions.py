@@ -1,195 +1,265 @@
 """
-This program aims to study the effect of the existence of a certain record inside 
-a certain dataset on the predictions that are made by a classifier that is trained using this dataset. 
-It considered a part from UCI Adult dataset with only two attributes: 'occupation' that is used as a 
-quasi-identifier (this works as an input for the classifier) and 'income_level' that is used as a sensitive 
-value (the classifier has to predict the sensitive value for a given quasi-identifier). 
-The considered classifier takes as input a quasi-identifier from a set Q and 
-makes a prediction from a set of sensitive attributes S. The classifier predicts, for input q, 
-the value of s for which the probability Pr[q and s] is maximal for every s in S. 
-Note that, that the probabilities are computed after adding Laplacian noise to the counts of (q,s) 
-inside the dataset.
+================================================================================================
+Apply Differential Testing on the results of differentially private queries on UCI Adult dataset
+================================================================================================
 
-More precisely, it does the following: 
-1- Read some already selected Adult records from a file or select new $size 
-   records from 'data/adult.all' based on the value of the variable $Select. 
-2- For every distinct record (q,s), it makes $NB_Iterations predictions while considering the full dataset 
-   (i.e. while this record exists). It then obtains a probability distribution P from the predicted 
-   sensitive attribute values. After removing this record from the dataset, it repeats the same process in 
-   order to obtain a probability distribution P'. Note again that he predictions are obtained based on the maximal 
-   probability Pr[q and s'] for every sensitive value s', after adding some noise. 
-3- For every record, it computes a distance between the corresponding probability distributions P and P'.
-   Steps 2 and 3 can be repeated for more than one distance computation method and more than one noise parameter epsilon. 
+Differential privacy is different from generalization techniques, like k-anonymity and l-diversity, 
+in that it does not explicitly publish microdata. Instead, a user makes a query on the data, the 
+server then computes the exact answer and adds some noise before replying. 
+We consider count queries, that is in the form of "What is the number of individuals in the data that 
+satisfy certain conditions". Moreover, we assume histogram queries, that is only a single round of 
+querying without any kind of adaptive querying in response to previous results. 
+
+The idea is to use the queries results ("the noised counts") to build a classifier that takes as input 
+a tuple of quasi-identifiers and outputs a prediction distribution on the sensitive attribute values. 
+
+The considered classifier is a Naive Bayes one which outputs, for a given quasi-identifier tuple q from 
+a set Q, a prediction distribution Pr[S|Q=q] where S is the set of all possible sensitive values.  
+As a noise, random values from a Laplacian distribution are considered. 
+
+In more details, do the following: 
+1- Read the full UCI Adult dataset from 'data/adult.all', pick up only the attributes in $ATT_QI + 
+   $ATT_SA, and randomly select $SIZE records. Moreover, write the selected dataset into $filename.
+   Then, quantize attributes in $ATT_CONTINUOUS. 
+   Note that, to read an already selected dataset one has to set $IS_SELECT_NEW to False.  
+
+2- For every distinct record (q,s), make $ITERATIONS_NB prediction distributions while considering 
+   the entire dataset (i.e. while this record exists). Then take their average in order to obtain 
+   a distribution P. After removing this record from the dataset, repeat the same process in order 
+   to obtain a probability distribution P_w. 
+
+3- For every record, compute a distance between the corresponding distributions P and P_w.
+   Repeat steps 2 and 3 for every distance computation method in $DISTANCE_TAGS 
+   and for every noise parameter epsilon in $EPSILON_VALUES. 
+
 4- Plot the cumulative relative frequency of the computed distances for all epsilon values in one graph. 
    A graph is plotted for each distance method. 
 """ 
-#
+
 # !/usr/bin/env python
 # coding=utf-8
-#
-from utils.methods import import_data, compute_counts, get_att_values
-from utils.methods import create_file
+
+import pdb
 import numpy as np
-import copy, math
-from pyemd import emd
-from scipy.stats import entropy
-from math import sqrt,  log 
-from random import randint
-import matplotlib.pyplot as plt
+import itertools
+import random
+import time 
 #
-def compute_probabilities(counts, epsilon): 
+from utils import methods
+
+
+def conditional_probabilities_compute(counts, epsilon): 
 	"""
-	This method computes the probabilities Pr[q and s] for all pairs (q,s) whose 
+	Compute the probability Pr[q|s] for every pair (q,s) whose 
 	frequencies are inside dictionary $counts.  
+
+	Pr[q|s] = C_qs/(sum_q C_qs)
+	where C_qs = 1 + max(0, counts[j][q][s] + noise) with j is the index of related attribute 
 	"""
-	mean = 0.0
-	decay = 1.0/epsilon
-	total = 0.0
-	#compute the total number of records (summation of all frequencies inside $counts)
-	#this is equal to the size of the dataset ($Size)
-	nb_records = 0
-	for value in counts.itervalues():
-		nb_records += value
-	#compute probabilities
-	probabilities = dict()
-	probabilities = copy.deepcopy(counts)
-	for key, value in probabilities.iteritems():
-		noise = np.random.laplace(loc=mean, scale=decay)
-		term = 1.0 + min(max(0, value + noise), nb_records) #The addition of 1 is just for correction. 
-		probabilities[key] = term                                #Also to avoid having total = 0.0
-		total += term
-	for key, value in probabilities.iteritems():
-		probabilities[key] = value/total
-	return probabilities
-#
-def compute_proba_distribution(q, counts, epsilon, N, sa_values): 
+	cond_probabilities = [dict() for x_dict in counts]
+	total_per_QI = [dict() for x_dict in counts]
+	for j, dictionary_j in enumerate(counts):
+	    for key_q, dict_counts in dictionary_j.iteritems():
+			for key_s, val_count in dict_counts.iteritems():
+				#add noise to the count value of the pair (q,s) and compute C_qs
+				C_qs = 1.0 + max(0, val_count + np.random.laplace(loc=0.0, scale=1.0/epsilon))
+				#insert the value of C_qs in $cond_probabilities list
+				try:
+					cond_probabilities[j][key_q][key_s] = C_qs
+				except KeyError:
+					cond_probabilities[j][key_q]  = {key_s: C_qs}
+				#add the value of C_qs to the related QI total
+				try:
+					total_per_QI[j][key_s] += C_qs
+				except KeyError:
+					total_per_QI[j][key_s]  = C_qs
+	#normalize the values to obtain the related probabilities 
+	for j, dictionary_j in enumerate(cond_probabilities):
+	    for key_q, dict_counts in dictionary_j.iteritems():
+		    for key_s in dict_counts.iterkeys():
+					cond_probabilities[j][key_q][key_s] /= total_per_QI[j][key_s]
+	return cond_probabilities
+
+
+def sa_values_proba_compute(counts, epsilon):
 	"""
-	This method obtains a prediction distribution for quasi-identifier $q after making 
-	$N predictions based on the records distribution $counts inside the related dataset. 
+	Compute the probability Pr[s] for every SA value s which appears 
+	inside dictionary $counts.  
+
+	Pr[s] = C_s/(sum_s C_s)
+	where C_s = 1 + max(0, count_s + noise) 
 	"""
-	pred_proba = [0.0 for s in sa_values]
-	#obtain $N predictions for $q
-	for i in range(N):
-		#compute all probabilities Pr[q' and s] for all QI q' and SA s
-		probabilities = dict()
-		probabilities = compute_probabilities(counts, epsilon)
-		#get the maximal probability Pr[$q and s] among all pairs ($q, s) for all SA s
-		maxx = 0.0
-		p_index = randint(0, len(sa_values)-1) #if all probabilities are equal, then one of them is randomly predicted
-		for i, s in enumerate(sa_values):
-			if probabilities[q+';'+s] > maxx:
-				maxx = probabilities[q+';'+s]
-				p_index = i
-		pred_proba[p_index] += 1
-	return pred_proba #Note that $pred_proba is not normalized
-#
-def distance_D(pd1, pd2, nb_classes, N, D='EMD'):
+	probabilities_s = dict()
+	#compute the counts of SA values by summing up the related entries inside $counts
+	if len(counts) != 0:
+		for key_q, dict_counts in counts[0].iteritems():
+			for key_s, val_count in dict_counts.iteritems():
+				try:
+					probabilities_s[key_s] += val_count
+				except KeyError:
+					probabilities_s[key_s]  = val_count
+		##### compute probabilities of sensitive attribute values ##### 
+		total_s = 0.0
+		for key_s, val_count_s in probabilities_s.iteritems():
+			#add noise to SA value counts
+			probabilities_s[key_s] = 1.0 + max(0, val_count_s + np.random.laplace(loc=0.0, scale=1.0/epsilon))
+			#add to the total
+			total_s += probabilities_s[key_s]
+		#normalize probabilities
+		for key_s in probabilities_s.keys():
+			probabilities_s[key_s] /= total_s
+	return probabilities_s
+
+
+def proba_distributions_compute(qi_tuples, counts, epsilon): 
 	"""
-	Computes distance between two probability distributions. 
-	$N is the total number of predictions that have been used to obtain pd1 and pd2. 
-	$N is used to denote the infinity when a division by 0 is encountered. 
+	Obtain a prediction distribution on the domain of sensitive attribute for every 
+	QI tuple inside $qi_tuples based on $counts, after adding some laplacian noise randomly selected from L(0, 1/epsilon). 
+
+	For a given QI tuple (q_1, ..., q_m), a prediction distribution composed of the probabilities Pr[s|(q_1, ..., q_m)]
+	for every possible value of sensitive attribute s. 
+
+	Pr[s|(q_1, ..., q_m)] is proportional to (1/C).Pr[s].Pr[q_1|s]. ... .Pr[q_m|s] under the naive conditional 
+	independence assumption, where C is a constant equal to the probability of the evidence.  
 	"""
-	distance = 0.0
-	if D == 'EMD':
-	    #An equal ground distance is taken between any two different attribute values. 
-	    matrix = []
-	    for i in range(nb_classes):
-	        raw = []
-	        for j in range(nb_classes):
-	            if j == i:
-	                raw.append(0.0)
-	            else:
-	                raw.append(1.0)
-	        matrix.append(raw)
-	    matrix_d = np.array(matrix) # ground distance matrix for EMD
-	    distance = emd(np.array(pd1), np.array(pd2), matrix_d)
-	elif D == 'ratio':
-		for i in range(nb_classes):
-			mr = 0.0   
-			if (pd1[i] == 0 and pd2[i] != 0) or (pd1[i] != 0 and pd2[i] == 0):
-				mr = 5#N
-			elif pd1[i] == 0 and pd2[i] == 0:
-				mr = 1
-			elif pd1[i] != 0 and pd2[i] != 0:
-				mr = max(pd1[i]/pd2[i], pd2[i]/pd1[i])
-			#
-			if mr > distance:
-				distance = mr    
-	return distance 
-#
-#ATT_NAMES_adult = ['age', 'workclass', 'final_weight', 'education',
+	distributions = [dict() for x in distinct_records]
+	#compute probability Pr[q|s] for every possible pair (q, s)  
+	cond_probabilities = conditional_probabilities_compute(counts, epsilon) 
+	#compute probability Pr[s] for every possible SA value s
+	sa_probabilities = sa_values_proba_compute(counts, epsilon)
+	#compute probabilities Pr[s|(q_1, ..., q_m)]
+	for i in range(len(distinct_records)):
+		total_i = 0.0 #total per record
+		for key_s, val_Proba_s in sa_probabilities.iteritems():
+			proba_s_quasi = val_Proba_s
+			for j, val_q in enumerate(distinct_records[i][:-1]):
+				proba_s_quasi *= cond_probabilities[j][val_q][key_s]
+			distributions[i][key_s] = proba_s_quasi
+			total_i += proba_s_quasi
+		#normalize
+		for key_s, val_proba in distributions[i].iteritems():
+			distributions[i][key_s] = val_proba/total_i
+	return distributions 
+
+
+#ATT_NAMES= ['age', 'workclass', 'final_weight', 'education', 
 #             'education_num', 'marital_status', 'occupation', 'relationship',
 #             'race', 'sex', 'capital_gain', 'capital_loss', 'hours_per_week',
-#             'native_country', 'income_level']   
-QI_ATT = ['occupation'] #quasi-identifier attributes
-SA_ATT = ['income_level'] #sensitive attributes
-Name = 'adult' #name of the dataset
-Size = 1000 #size of the dataset to consider
-Select = False #True is to select new data
-NB_Iterations = 70 #number of predictions to make for each record
-Epsilons = [0.01, 0.05, 0.1, 0.2, 0.3] #[0.01, 0.1, 1.0, 2.0] #noise parameter values to consider
-color_list  = {0.01:'c', 0.05:'b', 0.1: 'r', 0.2:'g', 0.3:'k'} 
-marker_list = {0.01:'x', 0.05:'o', 0.1: 's', 0.2:'>', 0.3:'*'} 
-D = ['EMD', 'ratio'] #distances to consider
-#
+#             'native_country', 'income_level']  
+#adult 
+ATT_QI =  ['age', 'education', 'sex', 'native_country'] #quasi-identifier attributes
+ATT_SA = 'income_level' #'occupation' #sensitive attributes
+#internet
+# ATT_QI =  ['age', 'education_attainment', 'major_occupation', 'marital_status', 'race'] #quasi-identifier attributes
+# ATT_SA = 'household_income' #sensitive attributes
+ATT_CONTINUOUS = ['age'] 
+QUANTILES = [
+            [[0,25],[26,50],[51,75],[75,100]] #age
+            ]
+NAME = 'adult' #name of the dataset
+SIZE = 1000   #size of the dataset to consider
+IS_SELECT_NEW = False #True is to select new data
+ITERATIONS_NB = 1000    #number of predictions to make for each record
+EPSILON_VALUES = [0.01, 0.05, 0.1, 0.3, 1.0] #noise parameter to consider
+COLOR_LIST  = {0.01:'c', 0.05:'b', 0.1: 'r', 0.2:'g', 0.3:'k', 1.0:'y'} 
+DISTANCE_TAGS = ['EMD', 'm_ratio'] #distances to consider: EMD for Earth Mover Distance, and m_ratio for Maximal ratio
+
+
 if __name__ == '__main__':
 
+	#pdb.set_trace()
+	time_start = time.time()
 	#1- Import data
 	print 'Read data ...'
-	selected_DATA = []
-	filename = 'results/selected_DATA/%s/testing_data'%Name #selected_%s_S%s'%(Name,Name,str(Size))
-	selected_DATA = import_data(Select, name=Name, size=Size, qi_list=QI_ATT, sa_list=SA_ATT, filename=filename)
+	dataset = [] # a dataset is a table
+	filename = 'results/selected_DATA/%s/selected_%s_S%s'%(NAME, NAME, str(SIZE))
+	#obtain the dataset 
+	dataset = methods.data_import(IS_SELECT_NEW, name=NAME, size=SIZE, qi_list=ATT_QI, sa=ATT_SA, filename=filename)
+	#quantize attributes in $ATT_CONTINUOUS
+	if all(x in ATT_QI for x in ATT_CONTINUOUS):
+		methods.data_quantize(dataset, [ATT_QI.index(x) for x in ATT_CONTINUOUS], QUANTILES) #directly modifies $dataset
+
+	#2- Build classifier and make predictions
+	#obtain counts for every pair (q_j, s) in the $dataset. Note that a record of $dataset has the form (q_1, ..., q_m, s) 
+	counts, sa_values = methods.counts_compute(dataset) # $counts is a list of dictionaries of dictionaries: [{val_q:{val_s:count}} for j=1,..,m]
+	#initiate distance dictionaries
+	distances_dict_average = dict()
+	distances_dict_modes = dict()
+	for d_tag in DISTANCE_TAGS:
+	 	distances_dict_average[d_tag] = []
+	 	distances_dict_modes[d_tag] = []
+	#Obtain the list of distinct records
+	dataset.sort()
+	distinct_records = list(record for record,_ in itertools.groupby(dataset))
 	#
-	#2- Add noise and compute prediction probability distributions
-	QI_num = len(QI_ATT)
-	SA_num = len(SA_ATT)
-	COUNTS = compute_counts(selected_DATA, QI_num, SA_num)
-	att_values = get_att_values(selected_DATA)
-	Distances_all_D = dict()
-	for xD in D:
-		Distances_all_D[xD] = []
-	for epsilon in Epsilons:
+	#for every $epsilon obtain the related prediction distributions
+	for epsilon in EPSILON_VALUES:
 		print 'Predictions for epsilon %s ...'%str(epsilon)
-		predicted_proba, predicted_proba_w = [], []
-		for key in COUNTS:
-			q = key.split(';')[0]
-			#obtain $NB_Iterations with the record
-			proba = compute_proba_distribution(q, COUNTS, epsilon, NB_Iterations, att_values[-1])
-			predicted_proba.append(proba)
-			#obtain $NB_Iterations without the record
-			COUNTS[key] -= 1
-			proba_w = compute_proba_distribution(q, COUNTS, epsilon, NB_Iterations, att_values[-1])
-			predicted_proba_w.append(proba_w) 
-			COUNTS[key] += 1
-		#
+		predicted_distributions_average, predicted_distributions_average_w = [], []
+		##### obtain prediction distributions from the full-data model M for all (distinct) records at the same time #####
+		#run $ITERATIONS_NB iterations
+		for iteration in range(ITERATIONS_NB):
+			#obtain a set of distributions: a distribution for each distinct record
+			distributions = proba_distributions_compute([record[:-1] for record in distinct_records], counts, epsilon)
+			#add $distributions to the total (in order to obtain the average)
+			for i in range(len(distinct_records)):
+				try:
+					for key_s in distributions[i].keys():
+						predicted_distributions_average[i][key_s] += distributions[i][key_s]
+				except IndexError:
+					predicted_distributions_average.append(distributions[i])			
+		#normalize
+		for i in range(len(distinct_records)): 
+			for key_s in predicted_distributions_average[i].keys():
+				predicted_distributions_average[i][key_s] /= ITERATIONS_NB
+		#####
+		##### obtain prediction distributions from the model M_i based on the dataset after removing the record i #####
+		predicted_distributions_average_w = []
+		#iterate for every distinct record
+		for i, record_i in enumerate(distinct_records):
+			#decrement the counts of the related pairs (q,s), each, by 1 -- remove the record
+			for j, val_q in enumerate(record_i[:-1]): 
+				counts[j][val_q][record_i[-1]] -= 1
+			#perform $ITERATIONS_NB for the record $record_i
+			for iteration in range(ITERATIONS_NB):
+				distribution_record_i = proba_distributions_compute([record_i[:-1]], counts, epsilon) 
+				#add $distribution_record_i to the total
+				try:
+					for key_s in distribution_record_i[0].keys():
+						predicted_distributions_average_w[i][key_s] += distribution_record_i[0][key_s]
+				except IndexError:
+					predicted_distributions_average_w.append(distribution_record_i[0])
+			#increment the related pairs (q,s) to re-obtain the original counts
+			for j, val_q in enumerate(record_i[:-1]): 
+				counts[j][val_q][record_i[-1]] += 1
+		#normalize to obtain the average prediction distributions
+		for i in range(len(distinct_records)): 
+			for key_s in predicted_distributions_average_w[i].keys():
+				predicted_distributions_average_w[i][key_s] /= ITERATIONS_NB
+		#print out the computation time in seconds
+		print 'Computation time in seconds:',  time.time() - time_start 
+		#write obtained prediction into predictions_file, a record per line with format
+		filename_predictions = 'results/predictions/DP/%s/predictions_%s_S%s_N%s_eps%s'%(NAME, NAME, str(SIZE), str(ITERATIONS_NB), str(epsilon))
+		predictions = []
+		for i in range(len(predicted_distributions_average)):
+			pred_with = ' '.join(str(predicted_distributions_average[i][val_s]) for val_s in sa_values) + ' '
+			pred_without = ' '.join(str(predicted_distributions_average_w[i][val_s]) for val_s in sa_values) + '\n'
+			predictions.append((pred_with+pred_without).split())
+		methods.table_write(predictions, filename_predictions)
+		#####
 		#3- Compute distances
-		for xD in D:
-			Distance_pp = []
-			for j in range(len(predicted_proba)):
-			    d = distance_D(predicted_proba[j], predicted_proba_w[j], len(att_values[-1]), NB_Iterations, xD)
-			    Distance_pp.append(d)
-			Distances_all_D[xD].append(Distance_pp)
+		for d_tag in DISTANCE_TAGS:
+			distances = []
+			#for every distinct record, compute the distance between the corresponding prediction distributions
+			for i in range(len(predicted_distributions_average)):
+				d = methods.distance_compute([predicted_distributions_average[i][val_s] for val_s in sa_values], 
+					                         [predicted_distributions_average_w[i][val_s] for val_s in sa_values], len(sa_values), d_tag)
+				distances.append(d)
+			distances_dict_average[d_tag].append(distances)
+
 	#4- Plot the relative CDF of the distances  
-	for xD in D:
-		curves, leg = [], []
-		fig = plt.figure()  
-		curves = [0 for j in range(len(Epsilons))]
-		leg = ['eps = ' + str(x) for x in Epsilons]
-		index = 0
-		for i in range(len(Distances_all_D[xD])):
-		    size = len(Distances_all_D[xD][i])
-		    yvals = np.arange(1,  size+1)/float(size)
-		    curves[index],  = plt.plot(np.sort([x for x in Distances_all_D[xD][i]]), yvals, color_list[Epsilons[i]], marker=marker_list[Epsilons[i]], label=Epsilons[i])
-		    index += 1
-		plt.legend([x for x in curves],leg,loc=4,fontsize=12,frameon=False)
-		#plt.xlim(min([min(x) for x in Distances_all_D][xD]), max([max(x) for x in Distances_all_D][xD]))
-		plt.xlabel('%s'%xD, fontsize=14)
-		plt.ylabel('Cumulative Relative Frequency',fontsize=14)  
-		plt.title('Size=%dK, N=%dK'%(Size/1000,NB_Iterations/1000))
-		fig = plt.gcf()
-		filename = 'results/figures/cdf/%s/cdf_DP_%s_S%d_N%d_%s.pdf'%(Name,Name,Size,NB_Iterations,xD)
-		create_file(filename)
-		fig.savefig(filename, bbox_inches='tight')
-		plt.show()
-		plt.close(fig)
+	for d_tag in DISTANCE_TAGS:
+		filename = 'results/figures/cdf/%s/cdf_DP_%s_S%d_N%d_%s.pdf'%(NAME, NAME, SIZE, ITERATIONS_NB, d_tag)
+		methods.cdf_plot(distances_dict_average[d_tag], EPSILON_VALUES, COLOR_LIST, d_tag, filename)
+
 	print 'Done!'

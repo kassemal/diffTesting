@@ -2,12 +2,13 @@
 Methods related to data reading, data writing, data manipulation, and computations.   
 """
 
-
 # !/usr/bin/env python
 # coding=utf-8
 from pulp import *
 import numpy as np
 import random
+import pyemd
+import matplotlib.pyplot as plt
 #
 import adult_data
 import internet_data
@@ -100,72 +101,85 @@ def data_quantize(dataset, att_indices, quantiles):
     return 
 
 
-# def att_values_get(dataset):
-#     """
-#     Take a table $dataset and return all the possible values for every attribute (column) 
-#     """
-#     if len(dataset) != 0:
-#         att_values = [[] for j in range(len(dataset[0]))]
-#         for row in dataset:
-#             for j in range(len(dataset[0])):
-#                 if row[j] not in att_values[j]:
-#                     att_values[j].append(row[j])
-#         return att_values
-#     else:
-#         return []
-
-
 def counts_compute(dataset): 
     """
     Input: $dataset, a list of lists [[]]. 
     refer to last column as sensitive attribute (SA), 
     and refer for other columns as quasi-identifier attributes (QI)
 
-    For every pair (val_qi, val_sa) compute the related count: the number of 
-    records (rows) that contains this pair, where val_qi is a QI value and val_sa is a SA value. 
-    -- do this for every quasi-identifier quasi-identifier attribute --
+    For every pair (val_q, val_s) compute the related count: the number of 
+    records (rows) that contains this pair, where val_q is a QI value and val_s is a SA value. 
 
-    Output: a list of dictionaries of dictionaries: [{{}}] if $dataset is not empty, 
-            and empty list [] otherwise. 
+    Output: a list of dictionaries of dictionaries: [{val_q:{val_s:count}} for j=1,..,QI_num] if $dataset is not empty, 
+            and empty list [] otherwise. (QI_num is the number of QI attributes)
 
     e.g: counts_compute([
-                         ['a', 'm', 's1'],
-                         ['a', 'n', 's2'],
-                         ['b', 'm', 's1'],
-                         ['a', 'm', 's2']
+                         ['a', 'd', 's1'],
+                         ['a', 'c', 's2'],
+                         ['b', 'd', 's1'],
+                         ['a', 'd', 's2']
                         ])
          return [
                  {'a': {'s2': 2, 's1': 1}, 'b': {'s2': 0, 's1': 1}}, 
-                 {'m': {'s2': 1, 's1': 2}, 'n': {'s2': 1, 's1': 0}}
+                 {'d': {'s2': 1, 's1': 2}, 'c': {'s2': 1, 's1': 0}}
                 ]
+    *Additionally return a list of sensitive attribute values (last column)
     """
     if len(dataset) != 0: #if dataset is not empty
-
         #obtain possible attributes' values 
         att_values = []
         for j in range(len(dataset[0])):
             att_values.append(list(set([record[j] for record in dataset])))
-        #obtain counts 
+        ##### obtain counts #####
         counts = []
         #initialize all counts to zero
         for j in range(len(dataset[0])-1):
-            counts.append({val_qi:{val_sa:0 for val_sa in att_values[-1]} for val_qi in att_values[j]})
+            counts.append({val_q:{val_s:0 for val_s in att_values[-1]} for val_q in att_values[j]})
         #compute counts
         for record in dataset:
-            for j, val_qi in enumerate(record[:-1]):
-                counts[j][val_qi][record[-1]] += 1
+            for j, val_q in enumerate(record[:-1]):
+                counts[j][val_q][record[-1]] += 1
         return counts, att_values[-1]
     else:
         return []
 
 
-def add_noise(counts, epsilon): 
-    """ add noise to counts"""
-    counts_noised = [dict() for x in range(len(counts))]
-    for j in range(len(counts)):
-        for key, value in counts[j].iteritems():
-            counts_noised[j][key] = value + np.random.laplace(loc=0.0, scale=1.0/epsilon)
-    return counts_noised
+def distance_compute(pd1, pd2, classes_nb, d_tag='EMD', infinity=1000):
+    """
+    Compute distance between two probability distributions $pd1 and $pd2. 
+
+    e.g. distance_compute([0.45, 0.55], [0.2, 0.8], classes_nb=2)
+    rType: float, a distance
+    """
+    distance = 0.0
+    #Switch cases according to the $d_tag
+    if d_tag == 'EMD':
+        #generate ground matrix: an equal ground distance is taken between any two different attribute values. 
+        ground_matrix = []
+        for i in range(classes_nb):
+            row = []
+            for j in range(classes_nb):
+                if j == i:
+                    row.append(0.0)
+                else:
+                    row.append(1.0)
+            ground_matrix.append(row)
+        ground_matrix = np.array(ground_matrix) 
+        distance = pyemd.emd(np.array([float(x) for x in pd1]), np.array([float(x) for x in pd2]), ground_matrix)
+    #
+    elif d_tag == 'm_ratio':#obtain maximal ratio
+        for i in range(classes_nb):
+            max_r = 0.0   
+            if (float(pd1[i]) == 0 and float(pd2[i]) != 0) or (float(pd1[i]) != 0 and float(pd2[i]) == 0):
+                max_r = infinity 
+            elif float(pd1[i]) == 0 and float(pd2[i]) == 0:
+                max_r = 1.0
+            elif float(pd1[i]) != 0 and float(pd2[i]) != 0:
+                max_r = max(float(pd1[i]), float(pd2[i]))/min(float(pd1[i]), float(pd2[i]))
+            #
+            if max_r > distance:
+                distance = max_r    
+    return distance 
 
 
 def file_create(filename):
@@ -195,4 +209,34 @@ def table_write(table,  filename):
         f.write(' '.join(str(x) for x in line) + '\n')
     f.close()
     return 
+
     
+def cdf_plot(distances_dict_average, eps_values, color_list, tag, filename):
+    '''
+    Plot curves and save related figure as $filename
+    '''
+    curves, legend = [], []
+    fig = plt.figure()  
+    curves = [0 for x in range(len(eps_values))]
+    legend = ['eps = ' + str(x) for x in eps_values]
+    index = 0
+    for i in range(len(distances_dict_average)):
+        size = len(distances_dict_average[i])
+        yvals = np.arange(1,  size+1)/float(size)
+        curves[index],  = plt.plot(np.sort([x for x in distances_dict_average[i]]), yvals, color_list[eps_values[i]], label=eps_values[i])
+        index += 1
+    plt.legend([x for x in curves], legend, loc=4, fontsize=12, frameon=False)
+    label_x = ''
+    if tag == 'EMD':
+        label_x = 'Earth Mover\'s Distance'
+    elif tag == 'm_ratio':
+        label_x = 'Maximal Ratio'
+    plt.xlabel('%s'%label_x, fontsize=14)
+    plt.ylabel('Cumulative Relative Frequency', fontsize=14)  
+    #plt.title('')
+    fig = plt.gcf()
+    file_create(filename)
+    fig.savefig(filename, bbox_inches='tight')
+    #plt.show()
+    plt.close(fig)
+    return
