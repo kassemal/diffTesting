@@ -50,8 +50,8 @@ def read():
     #initialize
     nb_attributes = len(ATT_NAMES)
     data, numeric_dict = [], []
-    for i in range(nb_attributes):
-        if CATEGORY[i] is False:
+    for j in range(nb_attributes):
+        if CATEGORY[j] is False:
        		numeric_dict.append(dict()) #dictionary for continuous attributes
     #read data
     data_file = open('data/adult.all', 'rU')
@@ -68,18 +68,18 @@ def read():
         data.append(temp)
         #keep a dictionary of continuous attributes
         index = 0
-        for i in range(nb_attributes):
-            if CATEGORY[i] is False:
+        for j in range(nb_attributes):
+            if CATEGORY[j] is False:
                 try:
-                    numeric_dict[index][temp[i]] += 1
+                    numeric_dict[index][temp[j]] += 1
                 except:
-                    numeric_dict[index][temp[i]] = 1
+                    numeric_dict[index][temp[j]] = 1
                 index += 1
     #pickle numeric attributes and get NumRange
     index = 0
-    for i in range(nb_attributes):
-        if CATEGORY[i] is False:
-            static_file = open('data/adult_' + ATT_NAMES[i] + '_static.pickle', 'wb')
+    for j in range(nb_attributes):
+        if CATEGORY[j] is False:
+            static_file = open('data/adult_' + ATT_NAMES[j] + '_static.pickle', 'wb')
             sort_value = list(numeric_dict[index].keys())
             sort_value.sort(cmp=ul.cmp_str)
             pickle.dump((numeric_dict[index], sort_value), static_file)
@@ -88,24 +88,4 @@ def read():
     return data
 
 
-def tree_get(attributes):
-    """
-    For every attribute in $attributes, read the related tree from data/adult_*.txt, 
-    and store it in $att_trees.
-    Moreover, store the the paths to leaves in the case of categorical attribute. 
-    """
-    prefix = 'data/adult_'
-    att_trees = []
-    paths_to_leaves = []
-    for i in range(len(attributes)):
-        if CATEGORY[ATT_NAMES.index(attributes[i])]:
-            att_tree,  path_to_leaf = ul.read_tree_file(attributes[i], prefix)
-            att_trees.append(att_tree)
-            paths_to_leaves.append(path_to_leaf)
-        else:
-            att_tree = ul.read_pickle_file(attributes[i], prefix)
-            att_trees.append(att_tree)
-    return att_trees,  paths_to_leaves
     
-    
-

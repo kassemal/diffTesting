@@ -134,22 +134,5 @@ def read():
             index += 1
     return data
 
-def tree_get(attributes):
-    """
-    For every attribute in $attributes, read the related tree from data/internet_*.txt, 
-    and store it in $att_trees.
-    Moreover, store the the paths to leaves in the case of categorical attribute. 
-    """
-    prefix = 'data/internet_'
-    att_trees = []
-    paths_to_leaves = []
-    for i in range(len(attributes)):
-        if CATEGORY[ATT_NAMES.index(attributes[i])]:
-            att_tree,  path_to_leaf = ul.read_tree_file(attributes[i], prefix)
-            att_trees.append(att_tree)
-            paths_to_leaves.append(path_to_leaf)
-        else:
-            att_tree = ul.read_pickle_file(attributes[i], prefix)
-            att_trees.append(att_tree)
-    return att_trees,  paths_to_leaves
+
   

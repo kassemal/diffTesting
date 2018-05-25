@@ -18,7 +18,7 @@ a set Q, a prediction distribution Pr[S|Q=q] where S is the set of all possible 
 As a noise, random values from a Laplacian distribution are considered. 
 
 In more details, do the following: 
-1- Read the full UCI Adult dataset from 'data/adult.all', pick up only the attributes in $ATT_QI + 
+1- Read full dataset from 'data/$data_filename', pick up only the attributes in $ATT_QI + 
    $ATT_SA, and randomly select $SIZE records. Moreover, write the selected dataset into $filename.
    Then, quantize attributes in $ATT_CONTINUOUS. 
    Note that, to read an already selected dataset one has to set $IS_SELECT_NEW to False.  
@@ -142,26 +142,22 @@ def proba_distributions_compute(qi_tuples, counts, epsilon):
 	return distributions 
 
 
-#ATT_NAMES= ['age', 'workclass', 'final_weight', 'education', 
-#             'education_num', 'marital_status', 'occupation', 'relationship',
-#             'race', 'sex', 'capital_gain', 'capital_loss', 'hours_per_week',
-#             'native_country', 'income_level']  
 #adult 
-ATT_QI =  ['age', 'education', 'sex', 'native_country'] #quasi-identifier attributes
-ATT_SA = 'income_level' #'occupation' #sensitive attributes
+#ATT_QI =  ['age', 'education', 'sex', 'native_country'] #quasi-identifier attributes
+#ATT_SA =  'occupation' #sensitive attributes
 #internet
-# ATT_QI =  ['age', 'education_attainment', 'major_occupation', 'marital_status', 'race'] #quasi-identifier attributes
-# ATT_SA = 'household_income' #sensitive attributes
-ATT_CONTINUOUS = ['age'] 
+ATT_QI =  ['age', 'education_attainment', 'major_occupation', 'marital_status', 'race'] #quasi-identifier attributes
+ATT_SA = 'household_income' #sensitive attributes
+ATT_QUANTIZE = ['age'] 
 QUANTILES = [
             [[0,25],[26,50],[51,75],[75,100]] #age
             ]
-NAME = 'adult' #name of the dataset
+NAME = 'internet' #name of the dataset
 SIZE = 1000   #size of the dataset to consider
-IS_SELECT_NEW = False #True is to select new data
-ITERATIONS_NB = 1000    #number of predictions to make for each record
+IS_SELECT_NEW = True #True is to select new data
+ITERATIONS_NB = 8    #number of predictions to make for each record
 EPSILON_VALUES = [0.01, 0.05, 0.1, 0.3, 1.0] #noise parameter to consider
-COLOR_LIST  = {0.01:'c', 0.05:'b', 0.1: 'r', 0.2:'g', 0.3:'k', 1.0:'y'} 
+COLOR_LIST  = {0.01:'m', 0.05:'c', 0.1: 'g', 0.2:'r', 0.3:'y', 1.0:'b'} 
 DISTANCE_TAGS = ['EMD', 'm_ratio'] #distances to consider: EMD for Earth Mover Distance, and m_ratio for Maximal ratio
 
 
@@ -174,21 +170,22 @@ if __name__ == '__main__':
 	dataset = [] # a dataset is a table
 	filename = 'results/selected_DATA/%s/selected_%s_S%s'%(NAME, NAME, str(SIZE))
 	#obtain the dataset 
-	dataset = methods.data_import(IS_SELECT_NEW, name=NAME, size=SIZE, qi_list=ATT_QI, sa=ATT_SA, filename=filename)
-	#quantize attributes in $ATT_CONTINUOUS
-	if all(x in ATT_QI for x in ATT_CONTINUOUS):
-		methods.data_quantize(dataset, [ATT_QI.index(x) for x in ATT_CONTINUOUS], QUANTILES) #directly modifies $dataset
+	if IS_SELECT_NEW:
+	    dataset, _ = methods.data_import(name=NAME, size=SIZE, qi_list=ATT_QI, sa=ATT_SA, filename=filename)
+	else:#read already selected data
+	    dataset = methods.data_read(filename=filename)
+	#quantize attributes in $ATT_QUANTIZE
+	if all(x in ATT_QI for x in ATT_QUANTIZE):
+		methods.data_quantize(dataset, [ATT_QI.index(x) for x in ATT_QUANTIZE], QUANTILES) #directly modifies $dataset
 
 	#2- Build classifier and make predictions
 	#obtain counts for every pair (q_j, s) in the $dataset. Note that a record of $dataset has the form (q_1, ..., q_m, s) 
 	counts, sa_values = methods.counts_compute(dataset) # $counts is a list of dictionaries of dictionaries: [{val_q:{val_s:count}} for j=1,..,m]
-	#initiate distance dictionaries
+	#initiate distance dictionary
 	distances_dict_average = dict()
-	distances_dict_modes = dict()
 	for d_tag in DISTANCE_TAGS:
 	 	distances_dict_average[d_tag] = []
-	 	distances_dict_modes[d_tag] = []
-	#Obtain the list of distinct records
+	#obtain the list of distinct records
 	dataset.sort()
 	distinct_records = list(record for record,_ in itertools.groupby(dataset))
 	#
@@ -196,7 +193,7 @@ if __name__ == '__main__':
 	for epsilon in EPSILON_VALUES:
 		print 'Predictions for epsilon %s ...'%str(epsilon)
 		predicted_distributions_average, predicted_distributions_average_w = [], []
-		##### obtain prediction distributions from the full-data model M for all (distinct) records at the same time #####
+		##### Obtain prediction distributions from the full-data model M for all (distinct) records at the same time #####
 		#run $ITERATIONS_NB iterations
 		for iteration in range(ITERATIONS_NB):
 			#obtain a set of distributions: a distribution for each distinct record
@@ -212,8 +209,7 @@ if __name__ == '__main__':
 		for i in range(len(distinct_records)): 
 			for key_s in predicted_distributions_average[i].keys():
 				predicted_distributions_average[i][key_s] /= ITERATIONS_NB
-		#####
-		##### obtain prediction distributions from the model M_i based on the dataset after removing the record i #####
+		##### Obtain prediction distributions from the model M_i based on the dataset after removing the record i #####
 		predicted_distributions_average_w = []
 		#iterate for every distinct record
 		for i, record_i in enumerate(distinct_records):
@@ -238,15 +234,10 @@ if __name__ == '__main__':
 				predicted_distributions_average_w[i][key_s] /= ITERATIONS_NB
 		#print out the computation time in seconds
 		print 'Computation time in seconds:',  time.time() - time_start 
-		#write obtained prediction into predictions_file, a record per line with format
+		#write obtained prediction into predictions_file, a record per line 
 		filename_predictions = 'results/predictions/DP/%s/predictions_%s_S%s_N%s_eps%s'%(NAME, NAME, str(SIZE), str(ITERATIONS_NB), str(epsilon))
-		predictions = []
-		for i in range(len(predicted_distributions_average)):
-			pred_with = ' '.join(str(predicted_distributions_average[i][val_s]) for val_s in sa_values) + ' '
-			pred_without = ' '.join(str(predicted_distributions_average_w[i][val_s]) for val_s in sa_values) + '\n'
-			predictions.append((pred_with+pred_without).split())
-		methods.table_write(predictions, filename_predictions)
-		#####
+		methods.predictions_write(predicted_distributions_average, predicted_distributions_average_w, sa_values, filename_predictions)
+		#
 		#3- Compute distances
 		for d_tag in DISTANCE_TAGS:
 			distances = []
