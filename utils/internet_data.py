@@ -81,8 +81,6 @@ False, False, False, True, True, True, True,  False,  True, True, True, True, Fa
 False, False, False, False, False, False, False, False, False, False, False,  False, False, False, False, 
 True, True, True, True, False, False, False,  False, False, False,  True, True,  True]
 
-#tree pickle files will be generated only for continuous attributes that are in $selected_continuous_attributes
-selected_continuous_attributes = ['age']
 
 def read():
     """
@@ -123,15 +121,14 @@ def read():
                 index += 1
     # pickle numeric attributes and get NumRange
     index = 0
-    #for j in range(nb_attributes):
-        #if CATEGORY[j] is False:
-    for att_name in selected_continuous_attributes:
-            static_file = open('data/internet_' + att_name + '_static.pickle', 'wb') #ATT_NAMES[j] + '_static.pickle', 'wb')
-            sort_value = list(numeric_dict[index].keys())
-            sort_value.sort(cmp=ul.cmp_str)
-            pickle.dump((numeric_dict[index], sort_value), static_file)
-            static_file.close()
-            index += 1
+    for j in range(nb_attributes):
+      if CATEGORY[j] is False:
+        static_file = open('data/internet_' + ATT_NAMES[j] + '_static.pickle', 'wb')  
+        sort_value = list(numeric_dict[index].keys())
+        sort_value.sort(cmp=ul.cmp_str)
+        pickle.dump((numeric_dict[index], sort_value), static_file)
+        static_file.close()
+        index += 1
     return data
 
 

@@ -12,11 +12,11 @@ from sklearn.svm import LinearSVC,  SVC
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn import tree
+from scipy.stats import entropy
 from pulp import *
 import numpy as np
 import random
 import pyemd
-import matplotlib.pyplot as plt
 #
 import utils.utility as ul
 import adult_data
@@ -164,7 +164,7 @@ def counts_compute(dataset):
         return []
 
 
-def distance_compute(pd1, pd2, classes_nb, d_tag='EMD', infinity=1000):
+def distance_compute(pd1, pd2, classes_nb, d_tag='EMD', infinity=10**30):
     """
     Compute distance between two probability distributions $pd1 and $pd2. 
 
@@ -199,6 +199,27 @@ def distance_compute(pd1, pd2, classes_nb, d_tag='EMD', infinity=1000):
             #
             if max_r > distance:
                 distance = max_r    
+    #
+    elif d_tag == 'TVD':
+        pd2_pd1 = [b-a for a, b in zip(pd1, pd2)]
+        for x in pd2_pd1:
+            distance += abs(x)
+        distance = 0.5*distance
+    #
+    elif d_tag == 'KLD':
+        distance = entropy(pd1, pd2)
+    #
+    elif D == 'JSD':
+        M =  [0.5*(b+a) for a, b in zip(pd1, pd2)]
+        distance = 0.5*entropy(pd1, M) + 0.5*entropy(M, pd2)
+    #
+    elif d_tag == 'BCD':
+        BC = 0.0
+        for i in range(len(pd1)):
+            BC += sqrt(pd1[i]*pd2[i])
+        distance = 0.0 - log(BC)
+
+
     return distance 
 
 
@@ -249,37 +270,6 @@ def predictions_write(predictions, predictions_w, sa_values, filename):
     return 
 
 
-def cdf_plot(distances_dict, p_values, color_list, tag, filename):
-    '''
-    Plot curves and save related figure as $filename
-    '''
-    curves, legend = [], []
-    fig = plt.figure()  
-    curves = [0 for x in range(len(p_values))]
-    legend = ['eps = ' + str(x) for x in p_values]
-    index = 0
-    for i in range(len(distances_dict)):
-        size = len(distances_dict[i])
-        yvals = np.arange(1,  size+1)/float(size)
-        curves[index],  = plt.plot(np.sort([x for x in distances_dict[i]]), yvals, color_list[p_values[i]], label=p_values[i])
-        index += 1
-    plt.legend([x for x in curves], legend, loc=4, fontsize=12, frameon=False)
-    label_x = ''
-    if tag == 'EMD':
-        label_x = 'Earth Mover\'s Distance'
-    elif tag == 'm_ratio':
-        label_x = 'Maximal Ratio'
-    plt.xlabel('%s'%label_x, fontsize=14)
-    plt.ylabel('Cumulative Relative Frequency', fontsize=14)  
-    #plt.title('')
-    fig = plt.gcf()
-    file_create(filename)
-    fig.savefig(filename, bbox_inches='tight')
-    #plt.show()
-    plt.close(fig)
-    return
-
-
 def tree_get(attributes, is_cat, prefix):
     """
     For every attribute in $attributes, read the related tree from data/adult_*.txt, 
@@ -320,7 +310,7 @@ def data_anonymize(dataset, att_trees, technique, p_value):
     return result, eval_result 
 
 
-def data_encode(anonymized_dataset, att_values, paths_to_leaves, is_cat):
+def data_encode_one_hot(anonymized_dataset, att_values, paths_to_leaves, is_cat):
     """
     Apply one-hot encoding on $anonymized_dataset based on $paths_to_leaves hierarchy
     Continuous attributes are scaled into the interval [0,1]
@@ -360,6 +350,41 @@ def data_encode(anonymized_dataset, att_values, paths_to_leaves, is_cat):
         record.append(anonymized_dataset[i][-1])
         encoded_data.append(record)
     return encoded_data
+    
+
+def data_encode_TF(anonymized_dataset, target, paths_to_leaves, is_cat):
+    """
+    Implement TF encoding, that is:
+    - For continuous attributes: if the target value is inside an interval, then set the related entry to 1. Otherwise, to 0.  
+    - For categorical attributes: if the target value is in the path from a category to an leaf, then set the related entry to 1. Otherwise, to 0.  
+    """
+    qi_num = len(anonymized_dataset[0]) - 1
+    encoded_data = []
+    for i in range(len(anonymized_dataset)):
+        record = []
+        index = 0
+        for j in range(qi_num):
+            if is_cat[j]:
+                if anonymized_dataset[i][j] in paths_to_leaves[index][target[j]]:
+                    record.append(1)
+                else:
+                    record.append(0)
+                index += 1
+            else:
+                temp = anonymized_dataset[i][j].split(',')
+                if len(temp) == 1:
+                    low = high = temp[0]
+                else:
+                    low = temp[0]
+                    high = temp[1]
+                if low <= target[j] <= high:
+                    record.append(1)
+                else:
+                    record.append(0)                
+        record.append(anonymized_dataset[i][-1])
+        encoded_data.append(record)
+    return encoded_data
+
 
 def model_train(training_data, mla='BNB'):
     """

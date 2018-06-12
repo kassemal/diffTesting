@@ -28,12 +28,7 @@ In more details, do the following:
    a distribution P. After removing this record from the dataset, repeat the same process in order 
    to obtain a probability distribution P_w. 
 
-3- For every record, compute a distance between the corresponding distributions P and P_w.
-   Repeat steps 2 and 3 for every distance computation method in $DISTANCE_TAGS 
-   and for every noise parameter epsilon in $EPSILON_VALUES. 
-
-4- Plot the cumulative relative frequency of the computed distances for all epsilon values in one graph. 
-   A graph is plotted for each distance method. 
+   Repeat steps 2 and 3 for every privacy parameter p_value in $P_VALUES.
 """ 
 
 # !/usr/bin/env python
@@ -143,28 +138,31 @@ def proba_distributions_compute(qi_tuples, counts, epsilon):
 
 
 #adult 
-#ATT_QI =  ['age', 'education', 'sex', 'native_country'] #quasi-identifier attributes
-#ATT_SA =  'occupation' #sensitive attributes
-#internet
-ATT_QI =  ['age', 'education_attainment', 'major_occupation', 'marital_status', 'race'] #quasi-identifier attributes
-ATT_SA = 'household_income' #sensitive attributes
-ATT_QUANTIZE = ['age'] 
+ATT_QI =  ['age', 'education', 'relationship', 'hours_per_week', 'native_country'] #quasi-identifier attributes
+ATT_SA = 'occupation' #sensitive attributes
+IS_CAT = [False, True, True, False, True]#specifies which attributes are categorical (True) and which are continue (False). Only required when IS_SELECT_NEW=False
+ATT_QUANTIZE = ['age', 'hours_per_week'] 
 QUANTILES = [
-            [[0,25],[26,50],[51,75],[75,100]] #age
+            [[0,25],[26,40],[41,60],[61,75],[76,90]], #age
+            [[0,20],[21,40],[41,60],[61,80],[81,100]]  #hours_per_week
             ]
-NAME = 'internet' #name of the dataset
+#internet
+#ATT_QI =  ['age', 'education_attainment', 'major_occupation', 'marital_status', 'race'] #quasi-identifier attributes
+#ATT_SA = 'household_income' #sensitive attributes
+#IS_CAT = [False, True, True, True, True]#specifies which attributes are categorical (True) and which are continue (False). Only required when IS_SELECT_NEW=False
+#ATT_QUANTIZE = ['age'] 
+#QUANTILES = [
+#            [[0,20],[21,40],[41,60],[61,80]] #age #internet 
+#            ]
+NAME = 'adult' #name of the dataset
 SIZE = 1000   #size of the dataset to consider
-IS_SELECT_NEW = True #True is to select new data
-ITERATIONS_NB = 8    #number of predictions to make for each record
+IS_SELECT_NEW = False #True is to select new data
+ITERATIONS_NB = 10    #number of predictions to make for each record
 EPSILON_VALUES = [0.01, 0.05, 0.1, 0.3, 1.0] #noise parameter to consider
-COLOR_LIST  = {0.01:'m', 0.05:'c', 0.1: 'g', 0.2:'r', 0.3:'y', 1.0:'b'} 
-DISTANCE_TAGS = ['EMD', 'm_ratio'] #distances to consider: EMD for Earth Mover Distance, and m_ratio for Maximal ratio
-
 
 if __name__ == '__main__':
 
 	#pdb.set_trace()
-	time_start = time.time()
 	#1- Import data
 	print 'Read data ...'
 	dataset = [] # a dataset is a table
@@ -181,16 +179,13 @@ if __name__ == '__main__':
 	#2- Build classifier and make predictions
 	#obtain counts for every pair (q_j, s) in the $dataset. Note that a record of $dataset has the form (q_1, ..., q_m, s) 
 	counts, sa_values = methods.counts_compute(dataset) # $counts is a list of dictionaries of dictionaries: [{val_q:{val_s:count}} for j=1,..,m]
-	#initiate distance dictionary
-	distances_dict_average = dict()
-	for d_tag in DISTANCE_TAGS:
-	 	distances_dict_average[d_tag] = []
 	#obtain the list of distinct records
 	dataset.sort()
 	distinct_records = list(record for record,_ in itertools.groupby(dataset))
 	#
 	#for every $epsilon obtain the related prediction distributions
 	for epsilon in EPSILON_VALUES:
+		time_start = time.time()
 		print 'Predictions for epsilon %s ...'%str(epsilon)
 		predicted_distributions_average, predicted_distributions_average_w = [], []
 		##### Obtain prediction distributions from the full-data model M for all (distinct) records at the same time #####
@@ -235,22 +230,7 @@ if __name__ == '__main__':
 		#print out the computation time in seconds
 		print 'Computation time in seconds:',  time.time() - time_start 
 		#write obtained prediction into predictions_file, a record per line 
-		filename_predictions = 'results/predictions/DP/%s/predictions_%s_S%s_N%s_eps%s'%(NAME, NAME, str(SIZE), str(ITERATIONS_NB), str(epsilon))
+		filename_predictions = 'results/predictions/%s/S%s/DP/predictions_%s_DP_p%s'%(NAME, str(SIZE), NAME, str(epsilon))
 		methods.predictions_write(predicted_distributions_average, predicted_distributions_average_w, sa_values, filename_predictions)
-		#
-		#3- Compute distances
-		for d_tag in DISTANCE_TAGS:
-			distances = []
-			#for every distinct record, compute the distance between the corresponding prediction distributions
-			for i in range(len(predicted_distributions_average)):
-				d = methods.distance_compute([predicted_distributions_average[i][val_s] for val_s in sa_values], 
-					                         [predicted_distributions_average_w[i][val_s] for val_s in sa_values], len(sa_values), d_tag)
-				distances.append(d)
-			distances_dict_average[d_tag].append(distances)
-
-	#4- Plot the relative CDF of the distances  
-	for d_tag in DISTANCE_TAGS:
-		filename = 'results/figures/cdf/%s/cdf_DP_%s_S%d_N%d_%s.pdf'%(NAME, NAME, SIZE, ITERATIONS_NB, d_tag)
-		methods.cdf_plot(distances_dict_average[d_tag], EPSILON_VALUES, COLOR_LIST, d_tag, filename)
 
 	print 'Done!'
