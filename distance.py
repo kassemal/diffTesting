@@ -10,7 +10,7 @@ from utils import methods
 DISTANCE_TAGS = ['EMD', 'm_ratio'] #distances to consider: EMD for Earth Mover Distance, and m_ratio for Maximal ratio
 NAME = 'adult' #name of the dataset: 'adult', 'internet'
 NB_classes = 14 #adult: 14, internet: 9
-SIZE = 2000   #size of the dataset to consider
+SIZE = 10000   #size of the dataset to consider
 #
 ANON_TECH = 'k_anonymity' #anonymization technique 'k_anonymity', 'l_diversity', 'DP'
 MLA = 'BNB' # 'GNB'

@@ -54,7 +54,7 @@ QUANTILES = [
 #             ]
 
 NAME = 'adult' #name of the dataset: 'adult', 'internet'
-SIZE = 2000   #size of the dataset to consider
+SIZE = 10000   #size of the dataset to consider
 IS_SELECT_NEW = True #True is to select new data
 ANON_TECH = 'k_anonymity' #anonymization technique 'k_anonymity', 'l_diversity'
 MLA = 'BNB' #Machine Learning algorithm
