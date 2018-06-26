@@ -26,7 +26,9 @@ In more details, do the following:
 2- For every distinct record (q,s), make $ITERATIONS_NB prediction distributions while considering 
    the entire dataset (i.e. while this record exists). Then take their average in order to obtain 
    a distribution P. After removing this record from the dataset, repeat the same process in order 
-   to obtain a probability distribution P_w. 
+   to obtain a probability distribution P_w. Note that, technically speaking, considering the 
+   average over $ITERATIONS_NB will result in level of privacy $ITERATIONS_NB*epsilon where epsilon 
+   is the exponent used in the Laplacian noise. 
 
    Repeat steps 2 and 3 for every privacy parameter p_value in $P_VALUES.
 """ 
@@ -36,7 +38,7 @@ In more details, do the following:
 
 import pdb
 import numpy as np
-import itertools
+#import itertools
 import random
 import time 
 #
@@ -50,14 +52,20 @@ def conditional_probabilities_compute(counts, epsilon):
 
 	Pr[q|s] = C_qs/(sum_q C_qs)
 	where C_qs = 1 + max(0, counts[j][q][s] + noise) with j is the index of related attribute 
+
+	Moreover, compute the probability Pr[s] for every SA value s which appears 
+ 	inside dictionary $counts.  
 	"""
+	overall_total = 0.0
+	pr_SA = dict()
 	cond_probabilities = [dict() for x_dict in counts]
 	total_per_QI = [dict() for x_dict in counts]
 	for j, dictionary_j in enumerate(counts):
 	    for key_q, dict_counts in dictionary_j.iteritems():
 			for key_s, val_count in dict_counts.iteritems():
 				#add noise to the count value of the pair (q,s) and compute C_qs
-				C_qs = 1.0 + max(0, val_count + np.random.laplace(loc=0.0, scale=1.0/epsilon))
+				#sensitivity = m/epsilon) where m is the number of counts disclosed (equal to the number of QI) 
+				C_qs = 1.0 + max(0, val_count + np.random.laplace(loc=0.0, scale=float(len(counts))/epsilon)) 
 				#insert the value of C_qs in $cond_probabilities list
 				try:
 					cond_probabilities[j][key_q][key_s] = C_qs
@@ -68,48 +76,57 @@ def conditional_probabilities_compute(counts, epsilon):
 					total_per_QI[j][key_s] += C_qs
 				except KeyError:
 					total_per_QI[j][key_s]  = C_qs
-	#normalize the values to obtain the related probabilities 
+				######### Pr[s] ############
+				try:
+					pr_SA[key_s] += C_qs
+				except KeyError:
+					pr_SA[key_s]  = C_qs
+				overall_total += C_qs
+	#normalize the values to obtain the related conditional probabilities 
 	for j, dictionary_j in enumerate(cond_probabilities):
 	    for key_q, dict_counts in dictionary_j.iteritems():
 		    for key_s in dict_counts.iterkeys():
 					cond_probabilities[j][key_q][key_s] /= total_per_QI[j][key_s]
-	return cond_probabilities
+	#normalize the values to obtain the related probabilities Pr[s]
+	for key_s, value in pr_SA.iteritems():
+	        pr_SA[key_s] = value/overall_total
+	return cond_probabilities, pr_SA
 
 
-def sa_values_proba_compute(counts, epsilon):
-	"""
-	Compute the probability Pr[s] for every SA value s which appears 
-	inside dictionary $counts.  
+# def sa_values_proba_compute(counts, epsilon):
+# 	"""
+# 	Compute the probability Pr[s] for every SA value s which appears 
+# 	inside dictionary $counts.  
 
-	Pr[s] = C_s/(sum_s C_s)
-	where C_s = 1 + max(0, count_s + noise) 
-	"""
-	probabilities_s = dict()
-	#compute the counts of SA values by summing up the related entries inside $counts
-	if len(counts) != 0:
-		for key_q, dict_counts in counts[0].iteritems():
-			for key_s, val_count in dict_counts.iteritems():
-				try:
-					probabilities_s[key_s] += val_count
-				except KeyError:
-					probabilities_s[key_s]  = val_count
-		##### compute probabilities of sensitive attribute values ##### 
-		total_s = 0.0
-		for key_s, val_count_s in probabilities_s.iteritems():
-			#add noise to SA value counts
-			probabilities_s[key_s] = 1.0 + max(0, val_count_s + np.random.laplace(loc=0.0, scale=1.0/epsilon))
-			#add to the total
-			total_s += probabilities_s[key_s]
-		#normalize probabilities
-		for key_s in probabilities_s.keys():
-			probabilities_s[key_s] /= total_s
-	return probabilities_s
+# 	Pr[s] = C_s/(sum_s C_s)
+# 	where C_s = 1 + max(0, count_s + noise) 
+# 	"""
+# 	probabilities_s = dict()
+# 	#compute the counts of SA values by summing up the related entries inside $counts
+# 	if len(counts) != 0:
+# 		for key_q, dict_counts in counts[0].iteritems():
+# 			for key_s, val_count in dict_counts.iteritems():
+# 				try:
+# 					probabilities_s[key_s] += val_count
+# 				except KeyError:
+# 					probabilities_s[key_s]  = val_count
+# 		##### compute probabilities of sensitive attribute values ##### 
+# 		total_s = 0.0
+# 		for key_s, val_count_s in probabilities_s.iteritems():
+# 			#add noise to SA value counts
+# 			probabilities_s[key_s] = 1.0 + max(0, val_count_s + np.random.laplace(loc=0.0, scale=1.0/epsilon))
+# 			#add to the total
+# 			total_s += probabilities_s[key_s]
+# 		#normalize probabilities
+# 		for key_s in probabilities_s.keys():
+# 			probabilities_s[key_s] /= total_s
+# 	return probabilities_s
 
 
-def proba_distributions_compute(qi_tuples, counts, epsilon): 
+def proba_distributions_compute(distinct_records, counts, epsilon): 
 	"""
 	Obtain a prediction distribution on the domain of sensitive attribute for every 
-	QI tuple inside $qi_tuples based on $counts, after adding some laplacian noise randomly selected from L(0, 1/epsilon). 
+	record inside $distinct_records based on $counts, after adding some Laplacian noise randomly selected from L(0, 1/epsilon). 
 
 	For a given QI tuple (q_1, ..., q_m), a prediction distribution composed of the probabilities Pr[s|(q_1, ..., q_m)]
 	for every possible value of sensitive attribute s. 
@@ -118,10 +135,10 @@ def proba_distributions_compute(qi_tuples, counts, epsilon):
 	independence assumption, where C is a constant equal to the probability of the evidence.  
 	"""
 	distributions = [dict() for x in distinct_records]
-	#compute probability Pr[q|s] for every possible pair (q, s)  
-	cond_probabilities = conditional_probabilities_compute(counts, epsilon) 
+	#compute probability Pr[q|s] for every possible pair (q, s) and Pr[s] for every possible SA value s
+	cond_probabilities, sa_probabilities = conditional_probabilities_compute(counts, epsilon) 
 	#compute probability Pr[s] for every possible SA value s
-	sa_probabilities = sa_values_proba_compute(counts, epsilon)
+	#sa_probabilities = sa_values_proba_compute(counts, epsilon)
 	#compute probabilities Pr[s|(q_1, ..., q_m)]
 	for i in range(len(distinct_records)):
 		total_i = 0.0 #total per record
@@ -136,7 +153,8 @@ def proba_distributions_compute(qi_tuples, counts, epsilon):
 			distributions[i][key_s] = val_proba/total_i
 	return distributions 
 
-
+#
+NAME = 'adult' #name of the dataset
 #adult 
 ATT_QI =  ['age', 'education', 'relationship', 'hours_per_week', 'native_country'] #quasi-identifier attributes
 ATT_SA = 'occupation' #sensitive attributes
@@ -149,16 +167,15 @@ QUANTILES = [
 #internet
 #ATT_QI =  ['age', 'education_attainment', 'major_occupation', 'marital_status', 'race'] #quasi-identifier attributes
 #ATT_SA = 'household_income' #sensitive attributes
-#IS_CAT = [False, True, True, True, True]#specifies which attributes are categorical (True) and which are continue (False). Only required when IS_SELECT_NEW=False
+#IS_CAT = [False, True, True, True, True]
 #ATT_QUANTIZE = ['age'] 
 #QUANTILES = [
 #            [[0,20],[21,40],[41,60],[61,80]] #age #internet 
 #            ]
-NAME = 'adult' #name of the dataset
-SIZE = 1000   #size of the dataset to consider
-IS_SELECT_NEW = False #True is to select new data
-ITERATIONS_NB = 10    #number of predictions to make for each record
-EPSILON_VALUES = [0.01, 0.05, 0.1, 0.3, 1.0] #noise parameter to consider
+SIZE = 10000          #size of the dataset to consider
+IS_SELECT_NEW = True #True is to select new data
+ITERATIONS_NB = 100    #number of predictions to make for each record
+EPSILON_VALUES = [0.01, 0.05, 0.1] #noise parameter to consider
 
 if __name__ == '__main__':
 
@@ -180,8 +197,13 @@ if __name__ == '__main__':
 	#obtain counts for every pair (q_j, s) in the $dataset. Note that a record of $dataset has the form (q_1, ..., q_m, s) 
 	counts, sa_values = methods.counts_compute(dataset) # $counts is a list of dictionaries of dictionaries: [{val_q:{val_s:count}} for j=1,..,m]
 	#obtain the list of distinct records
-	dataset.sort()
-	distinct_records = list(record for record,_ in itertools.groupby(dataset))
+	#dataset.sort()
+	#distinct_records = list(record for record,_ in itertools.groupby(dataset))
+	distinct_records = []
+	for i in range(0, len(dataset)):
+		if dataset[i] not in distinct_records:
+			distinct_records.append(dataset[i])
+	#print len(distinct_records)
 	#
 	#for every $epsilon obtain the related prediction distributions
 	for epsilon in EPSILON_VALUES:
@@ -192,7 +214,7 @@ if __name__ == '__main__':
 		#run $ITERATIONS_NB iterations
 		for iteration in range(ITERATIONS_NB):
 			#obtain a set of distributions: a distribution for each distinct record
-			distributions = proba_distributions_compute([record[:-1] for record in distinct_records], counts, epsilon)
+			distributions = proba_distributions_compute(distinct_records, counts, epsilon)
 			#add $distributions to the total (in order to obtain the average)
 			for i in range(len(distinct_records)):
 				try:
@@ -200,7 +222,7 @@ if __name__ == '__main__':
 						predicted_distributions_average[i][key_s] += distributions[i][key_s]
 				except IndexError:
 					predicted_distributions_average.append(distributions[i])			
-		#normalize
+		#obtain the average  
 		for i in range(len(distinct_records)): 
 			for key_s in predicted_distributions_average[i].keys():
 				predicted_distributions_average[i][key_s] /= ITERATIONS_NB
@@ -213,7 +235,7 @@ if __name__ == '__main__':
 				counts[j][val_q][record_i[-1]] -= 1
 			#perform $ITERATIONS_NB for the record $record_i
 			for iteration in range(ITERATIONS_NB):
-				distribution_record_i = proba_distributions_compute([record_i[:-1]], counts, epsilon) 
+				distribution_record_i = proba_distributions_compute([record_i], counts, epsilon) 
 				#add $distribution_record_i to the total
 				try:
 					for key_s in distribution_record_i[0].keys():
@@ -223,14 +245,14 @@ if __name__ == '__main__':
 			#increment the related pairs (q,s) to re-obtain the original counts
 			for j, val_q in enumerate(record_i[:-1]): 
 				counts[j][val_q][record_i[-1]] += 1
-		#normalize to obtain the average prediction distributions
+		#obtain the average  
 		for i in range(len(distinct_records)): 
 			for key_s in predicted_distributions_average_w[i].keys():
 				predicted_distributions_average_w[i][key_s] /= ITERATIONS_NB
 		#print out the computation time in seconds
 		print 'Computation time in seconds:',  time.time() - time_start 
 		#write obtained prediction into predictions_file, a record per line 
-		filename_predictions = 'results/predictions/%s/S%s/DP/predictions_%s_DP_p%s'%(NAME, str(SIZE), NAME, str(epsilon))
+		filename_predictions = 'results/predictions/%s/S%s/DP/N%d/predictions_%s_DP_p%s'%(NAME, str(SIZE), ITERATIONS_NB, NAME, str(epsilon))
 		methods.predictions_write(predicted_distributions_average, predicted_distributions_average_w, sa_values, filename_predictions)
-
+	print 'Number of classes:%d'%len(sa_values)
 	print 'Done!'

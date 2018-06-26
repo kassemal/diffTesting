@@ -9,6 +9,8 @@ Apply Differential Testing on generalized anonymization techniques like K-anonym
    Note that, to read an already selected dataset one has to set $IS_SELECT_NEW to False.
 
 2- Anonymize and encode the full dataset. Then use it to train a machine learning model (M). 
+   Note that, in the case of "TF" encoding the dataset has to be encoded for every distinct record, 
+   and thus a new model (M) has to be generated every time. 
 
 3- For every distinct record (q,s), use the full-data model (M) to obtain a prediction distribution (P) on the domain 
    of possible values of s given q as an input. Then remove this record from the dataset, and repeat the same process: 
@@ -29,12 +31,13 @@ To encode data after anonymization, one-hot encoding is used.
 
 import pdb
 import numpy as np
-import itertools
+#import itertools
 import time 
 import copy
 #
 from utils import methods
 
+NAME = 'adult' #name of the dataset: 'adult', 'internet'
 #adult 
 ATT_QI = ['age', 'education', 'relationship', 'hours_per_week', 'native_country'] #quasi-identifier attributes
 ATT_SA = 'occupation' #sensitive attributes
@@ -52,8 +55,7 @@ QUANTILES = [
 # QUANTILES = [
 #              [[0,20],[21,40],[41,60],[61,80]] #age #internet 
 #             ]
-
-NAME = 'adult' #name of the dataset: 'adult', 'internet'
+#
 SIZE = 10000   #size of the dataset to consider
 IS_SELECT_NEW = True #True is to select new data
 ANON_TECH = 'k_anonymity' #anonymization technique 'k_anonymity', 'l_diversity'
@@ -65,6 +67,7 @@ P_VALUES = [1, 2, 3, 5, 8] # Parameter used for anonymization
 if __name__ == '__main__':
 
 	#pdb.set_trace()
+
 	#1- Import data
 	print 'Read data ...'
 	dataset = [] # a dataset is a table
@@ -83,8 +86,13 @@ if __name__ == '__main__':
 		if ATT_QI[j] in ATT_QUANTIZE:
 			is_cat[j] = True
 	#obtain the list of distinct records
-	dataset.sort()
-	distinct_records = list(record for record,_ in itertools.groupby(dataset))
+	#dataset.sort()
+	#distinct_records = list(record for record,_ in itertools.groupby(dataset))
+	distinct_records = []
+	for i in range(0, len(dataset)):
+		if dataset[i] not in distinct_records:
+			distinct_records.append(dataset[i])
+
 	#Iterate for every $p_value in $P_VALUES
 	for p_value in P_VALUES:
 		time_start = time.time()
@@ -100,6 +108,7 @@ if __name__ == '__main__':
 		for j in range(len(dataset[0])-1):
 			att_values.append(list(set([record[j] for record in dataset])))
 		#
+		classes_ref = []
 		if ENC_TECH == 'OH':
 			#encode anonymized (full) dataset 
 			encoded_dataset = methods.data_encode_one_hot(anonymized_dataset, att_values, paths_to_leaves, is_cat)
@@ -112,7 +121,7 @@ if __name__ == '__main__':
 		elif ENC_TECH == 'TF':
 			#input records
 			input_records = len(distinct_records)*[len(dataset[0])*[1]]
-
+		#
 		#3-Iterate for every distinct record inside the dataset
 		predicted_distributions, predicted_distributions_w = [], []
 		for i in range(len(distinct_records)):
@@ -122,9 +131,13 @@ if __name__ == '__main__':
 				#generate a model M using full dataset
 				model_M = methods.model_train(encoded_dataset, MLA)
 				#get the order of the classes
-				if i == 0:
-					classes_ref = model_M.classes_.tolist()
-			#
+				classes = model_M.classes_.tolist()
+				#make sure that classes order is coherent
+		        if len(classes_ref) == 0:
+		            classes_ref = copy.deepcopy(classes) 
+		        elif classes != classes_ref:
+		                print 'Classes order error!'
+		                break
 			#obtain a prediction distribution for distinct record i from the full-data model
 			predicted_distributions.append(model_M.predict_proba([input_records[i][:-1]]).tolist()[0])
 			##### Remove record $i, then generate model M_i #####
@@ -149,16 +162,15 @@ if __name__ == '__main__':
 				input_record_w = [len(dataset[0])*[1]]
 			#generate a model M_w using $encoded_dataset_w
 			model_M_w = methods.model_train(encoded_dataset_w, MLA)
-			#obtain a prediction distribution for distinct record i from the model M_w
-			if model_M_w.classes_.tolist() == classes_ref:#make sure that both models M and M_w adopt the same classes order
-				predicted_distributions_w.append(model_M_w.predict_proba([input_record_w[0][:-1]]).tolist()[0])
-			else:
+			#make sure that both models M and M_w adopt the same classes order
+			if model_M_w.classes_.tolist() != classes_ref:
 				print 'Classes order error!'
 				break
+			#obtain a prediction distribution for distinct record i from the model M_w
+			predicted_distributions_w.append(model_M_w.predict_proba([input_record_w[0][:-1]]).tolist()[0])
 		#print out the computation time in seconds
 		print 'Computation time in seconds:',  time.time() - time_start         #write obtained prediction into predictions_file, a record per line
 		filename_predictions = 'results/predictions/%s/S%s/%s/%s/%s/predictions_%s_%s_p%s'%(NAME, str(SIZE), ANON_TECH, MLA, ENC_TECH, NAME, ANON_TECH, str(p_value))
 		methods.table_write([predicted_distributions[l]+predicted_distributions_w[l] for l in range(len(predicted_distributions))], filename_predictions)
-
 	print 'Number of classes:%d'%len(classes_ref)
 	print 'Done!'
