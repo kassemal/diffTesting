@@ -161,7 +161,7 @@ def counts_compute(dataset):
                 counts[j][val_q][record[-1]] += 1
         return counts, att_values[-1]
     else:
-        return []
+        return [], []
 
 
 def distance_compute(pd1, pd2, classes_nb, d_tag='EMD', infinity=10**30):
@@ -252,14 +252,14 @@ def table_write(table, filename):
     return 
 
 
-def predictions_write(predictions, predictions_w, sa_values, filename):
+def predictions_write(predictions, predictions_w, sa_values, filename, mode='a'):
     """
     Write $predictions and $predictions_w into $filename. 
     A line per record: $predictions[i] + $predictions_w[i]
     """
     if len(predictions) == len(predictions_w):
         file_create(filename)
-        f = open(filename, 'w')
+        f = open(filename, mode)
         for i in range(len(predictions)):
             pred_with = ' '.join(str(predictions[i][val_s]) for val_s in sa_values) + ' '
             pred_without = ' '.join(str(predictions_w[i][val_s]) for val_s in sa_values) + '\n'

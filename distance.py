@@ -15,8 +15,8 @@ SIZE = 10000    #size of the dataset to consider
 ANON_TECH = 'k_anonymity' #anonymization technique 'k_anonymity', 'l_diversity', 'DP'
 MLA = 'BNB' # 'GNB'
 ENC_TECH = 'TF' #encoding technique 'TF' (True-False), 'OH' (one-hot) 
-P_VALUES = [1, 2, 3, 5, 8] # Parameter used for anonymization
-COLOR_LIST  = {1:'b', 2:'r', 3:'g', 5:'y', 8:'m'}  
+P_VALUES = [2, 5, 8, 12, 16, 24, 32] # Parameter used for anonymization
+COLOR_LIST  = {1:'b', 2:'r', 5:'g', 8:'y', 12:'m', 16:'k', 24:'m--', 32:'k--'}  
 #
 x_label = {'k_anonymity':'K', 'l_diversity':'L'}
 
@@ -27,7 +27,7 @@ def max_plot(x_values, y_values, tech, tag, filename):
     plt.xticks(range(len(x_values)), x_values)
     plt.ylabel('Maximum %s'%y_label[tag], fontsize=16)
     plt.xlabel('%s'%x_label[tech], fontsize=16)
-    #plt.show()
+    plt.show()
     #fig = plt.gcf()
     methods.file_create(filename)
     fig.savefig(filename, bbox_inches='tight')
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     #Plot the relative CDF of the distances  
     for d_tag in DISTANCE_TAGS:
         #plot max. distances
-        filename = 'results/figures/%s/S%s/%s/%s/%s/%s/cdf_%s_%s_%s.pdf'%(NAME, str(SIZE), ANON_TECH, MLA, ENC_TECH, d_tag, NAME, ANON_TECH, d_tag)
+        max_dfile = 'results/figures/%s/S%s/%s/%s/%s/%s/cdf_%s_%s_%s.pdf'%(NAME, str(SIZE), ANON_TECH, MLA, ENC_TECH, d_tag, NAME, ANON_TECH, d_tag)
         max_plot(P_VALUES, max_d[d_tag], ANON_TECH, d_tag, max_dfile)
         #plot cdf
         curves, legend = [], []
@@ -106,6 +106,6 @@ if __name__ == '__main__':
         max_dfile = 'results/figures/%s/S%s/%s/%s/%s/%s/max_d_%s_%s_%s.pdf'%(NAME, str(SIZE), ANON_TECH, MLA, ENC_TECH, d_tag, NAME, ANON_TECH, d_tag)
         methods.file_create(filename)
         fig.savefig(filename, bbox_inches='tight')
-        #plt.show()
+        plt.show()
         plt.close(fig)
     print 'Done!'

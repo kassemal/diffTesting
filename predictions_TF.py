@@ -8,9 +8,7 @@ Apply Differential Testing on generalized anonymization techniques like K-anonym
    Then, quantize attributes in $ATT_CONTINUOUS. 
    Note that, to read an already selected dataset one has to set $IS_SELECT_NEW to False.
 
-2- Anonymize and encode the full dataset. Then use it to train a machine learning model (M). 
-   Note that, in the case of "TF" encoding the dataset has to be encoded for every distinct record, 
-   and thus a new model (M) has to be generated every time. 
+2- Anonymize and encode the full dataset using the binary encoding (TF). Then use it to train a machine learning model (M). 
 
 3- For every distinct record (q,s), use the full-data model (M) to obtain a prediction distribution (P) on the domain 
    of possible values of s given q as an input. Then remove this record from the dataset, and repeat the same process: 
@@ -23,7 +21,6 @@ This implementation considers
 Basic Mondrian K-Anonymity: https://github.com/qiyuangong/Basic_Mondrian
 and Mondrian L-Diversity: https://github.com/qiyuangong/Mondrian_L_Diversity
 
-To encode data after anonymization, one-hot encoding is used.
 """
 
 # !/usr/bin/env python
@@ -39,10 +36,10 @@ from utils import methods
 
 NAME = 'adult' #name of the dataset: 'adult', 'internet'
 #adult 
-ATT_QI = ['age', 'education', 'relationship', 'hours_per_week', 'native_country'] #quasi-identifier attributes
+ATT_QI = ['age', 'education', 'marital_status', 'hours_per_week', 'native_country'] #quasi-identifier attributes
 ATT_SA = 'occupation' #sensitive attributes
 IS_CAT = [False, True, True, False, True]#specifies which attributes are categorical (True) and which are continue (False). Only required when IS_SELECT_NEW=False
-ATT_QUANTIZE = ['age', 'hours_per_week'] 
+ATT_QUANTIZE = [] #['age', 'hours_per_week'] 
 QUANTILES = [
             [[0,30],[31,45],[46,60],[61,75],[76,100]], #age 
             [[0,20],[21,40],[41,60],[61,80],[81,100]]  #hours_per_week
@@ -60,7 +57,6 @@ SIZE = 10000   #size of the dataset to consider
 IS_SELECT_NEW = True #True is to select new data
 ANON_TECH = 'k_anonymity' #anonymization technique 'k_anonymity', 'l_diversity'
 MLA = 'BNB' #Machine Learning algorithm
-ENC_TECH = 'TF' #encoding technique 'TF' (True-False), 'OH' (one-hot) 
 P_VALUES = [1, 2, 3, 5, 8] # Parameter used for anonymization
 
 
@@ -108,44 +104,31 @@ if __name__ == '__main__':
 		for j in range(len(dataset[0])-1):
 			att_values.append(list(set([record[j] for record in dataset])))
 		#
+		#input record -- to be used as input for the machine learning models
+		input_record = len(dataset[0])*[1]
 		classes_ref = []
-		if ENC_TECH == 'OH':
-			#encode anonymized (full) dataset 
-			encoded_dataset = methods.data_encode_one_hot(anonymized_dataset, att_values, paths_to_leaves, is_cat)
-			#encode unanonymized (distinct) records -- to be used as input for the machine learning models
-			input_records = methods.data_encode_one_hot(distinct_records, att_values, paths_to_leaves, is_cat)
-			#generate a model M using full dataset
-			model_M = methods.model_train(encoded_dataset, MLA)
-			#get the order of the classes
-			classes_ref = model_M.classes_.tolist()
-		elif ENC_TECH == 'TF':
-			#input records
-			input_records = len(distinct_records)*[len(dataset[0])*[1]]
-		#
 		#3-Iterate for every distinct record inside the dataset
 		predicted_distributions, predicted_distributions_w = [], []
 		for i in range(len(distinct_records)):
-			if ENC_TECH == 'TF': #new encoding for every record
-				#encode anonymized (full) dataset 
-				encoded_dataset = methods.data_encode_TF(anonymized_dataset, distinct_records[i], paths_to_leaves, is_cat)
-				#generate a model M using full dataset
-				model_M = methods.model_train(encoded_dataset, MLA)
-				#get the order of the classes
-				classes = model_M.classes_.tolist()
-				#make sure that classes order is coherent
-		        if len(classes_ref) == 0:
-		            classes_ref = copy.deepcopy(classes) 
-		        elif classes != classes_ref:
-		                print 'Classes order error!'
-		                break
+			#encode anonymized (full) dataset 
+			encoded_dataset = methods.data_encode_TF(anonymized_dataset, distinct_records[i], paths_to_leaves, is_cat)
+			#generate a model M using full dataset
+			model_M = methods.model_train(encoded_dataset, MLA)
+			#get the order of the classes
+			classes = model_M.classes_.tolist()
+			#make sure that classes order is coherent
+	        if len(classes_ref) == 0:
+	            classes_ref = copy.deepcopy(classes) 
+	        elif classes != classes_ref:
+	                print 'Classes order error!'
+	                break
 			#obtain a prediction distribution for distinct record i from the full-data model
-			predicted_distributions.append(model_M.predict_proba([input_records[i][:-1]]).tolist()[0])
+			predicted_distributions.append(model_M.predict_proba(input_record).tolist()[0])
 			##### Remove record $i, then generate model M_i #####
 			#remove record $i
 			index = dataset.index(distinct_records[i])
 			temp_dataset_w = copy.deepcopy(dataset)
 			temp_dataset_w.pop(index)
-			#print len(temp_dataset_w)
 			#re-anonymize datset
 			anonymized_dataset_w, eval_result = methods.data_anonymize(temp_dataset_w, att_trees, ANON_TECH, p_value)
 			#obtain QI attributes' values again (as some values may disappear from the dataset)
@@ -153,13 +136,7 @@ if __name__ == '__main__':
 			for j in range(len(dataset[0])-1):
 				att_values_w.append(list(set([record[j] for record in temp_dataset_w])))
 			#encode anonymized dataset $anonymized_dataset_w
-			if ENC_TECH == 'OH':
-				encoded_dataset_w = methods.data_encode_one_hot(anonymized_dataset_w, att_values_w, paths_to_leaves, is_cat)
-				#re-encode the input record $distinct_records[i]
-				input_record_w = methods.data_encode_one_hot([distinct_records[i]], att_values_w, paths_to_leaves, is_cat)
-			elif ENC_TECH == 'TF':
-				encoded_dataset_w = methods.data_encode_TF(anonymized_dataset_w, distinct_records[i], paths_to_leaves, is_cat)
-				input_record_w = [len(dataset[0])*[1]]
+			encoded_dataset_w = methods.data_encode_TF(anonymized_dataset_w, distinct_records[i], paths_to_leaves, is_cat)
 			#generate a model M_w using $encoded_dataset_w
 			model_M_w = methods.model_train(encoded_dataset_w, MLA)
 			#make sure that both models M and M_w adopt the same classes order
@@ -167,10 +144,10 @@ if __name__ == '__main__':
 				print 'Classes order error!'
 				break
 			#obtain a prediction distribution for distinct record i from the model M_w
-			predicted_distributions_w.append(model_M_w.predict_proba([input_record_w[0][:-1]]).tolist()[0])
+			predicted_distributions_w.append(model_M_w.predict_proba(input_record).tolist()[0])
 		#print out the computation time in seconds
 		print 'Computation time in seconds:',  time.time() - time_start         #write obtained prediction into predictions_file, a record per line
-		filename_predictions = 'results/predictions/%s/S%s/%s/%s/%s/predictions_%s_%s_p%s'%(NAME, str(SIZE), ANON_TECH, MLA, ENC_TECH, NAME, ANON_TECH, str(p_value))
+		filename_predictions = 'results/predictions/%s/S%s/%s/%s/TF/predictions_%s_%s_p%s'%(NAME, str(SIZE), ANON_TECH, MLA, NAME, ANON_TECH, str(p_value))
 		methods.table_write([predicted_distributions[l]+predicted_distributions_w[l] for l in range(len(predicted_distributions))], filename_predictions)
 	print 'Number of classes:%d'%len(classes_ref)
 	print 'Done!'

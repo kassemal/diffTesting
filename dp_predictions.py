@@ -1,7 +1,7 @@
 """
-================================================================================================
-Apply Differential Testing on the results of differentially private queries on UCI Adult dataset
-================================================================================================
+=====================================================================================
+Apply Differential Inference Testing on the results of differentially private queries
+=====================================================================================
 
 Differential privacy is different from generalization techniques, like k-anonymity and l-diversity, 
 in that it does not explicitly publish microdata. Instead, a user makes a query on the data, the 
@@ -156,7 +156,7 @@ def proba_distributions_compute(distinct_records, counts, epsilon):
 #
 NAME = 'adult' #name of the dataset
 #adult 
-ATT_QI =  ['age', 'education', 'relationship', 'hours_per_week', 'native_country'] #quasi-identifier attributes
+ATT_QI = ['age', 'education', 'marital_status', 'hours_per_week', 'native_country'] #quasi-identifier attributes
 ATT_SA = 'occupation' #sensitive attributes
 IS_CAT = [False, True, True, False, True]#specifies which attributes are categorical (True) and which are continue (False). Only required when IS_SELECT_NEW=False
 ATT_QUANTIZE = ['age', 'hours_per_week'] 
@@ -173,9 +173,9 @@ QUANTILES = [
 #            [[0,20],[21,40],[41,60],[61,80]] #age #internet 
 #            ]
 SIZE = 10000          #size of the dataset to consider
-IS_SELECT_NEW = True #True is to select new data
-ITERATIONS_NB = 100    #number of predictions to make for each record
-EPSILON_VALUES = [0.01, 0.05, 0.1] #noise parameter to consider
+IS_SELECT_NEW = False #True is to select new data
+ITERATIONS_NB = 10000    #number of predictions to make for each record
+EPSILON_VALUES = [0.01, 0.05, 0.1, 0.3, 0.5, 1.0] #noise parameter to consider
 
 if __name__ == '__main__':
 
@@ -183,7 +183,7 @@ if __name__ == '__main__':
 	#1- Import data
 	print 'Read data ...'
 	dataset = [] # a dataset is a table
-	filename = 'results/selected_DATA/%s/selected_%s_S%s'%(NAME, NAME, str(SIZE))
+	filename = 'results/selected_DATA/%s/fixed_selected_%s_S%s'%(NAME, NAME, str(SIZE))
 	#obtain the dataset 
 	if IS_SELECT_NEW:
 	    dataset, _ = methods.data_import(name=NAME, size=SIZE, qi_list=ATT_QI, sa=ATT_SA, filename=filename)

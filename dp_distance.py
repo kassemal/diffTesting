@@ -11,10 +11,10 @@ DISTANCE_TAGS = ['EMD', 'm_ratio'] #distances to consider: EMD for Earth Mover D
 NAME = 'adult'  #name of the dataset: 'adult', 'internet'
 NB_classes = 14 #make sure to use the correct number of classes. Maximum number for adult: 14, internet: 9 
 SIZE = 10000    #size of the dataset to consider
-ITERATIONS_NB = 100 
+ITERATIONS_NB = 1000 
 #
-P_VALUES = [0.01, 0.05, 0.1] 
-COLOR_LIST  = {0.01:'m', 0.05:'g', 0.1:'b'} 
+P_VALUES = [0.01, 0.05, 0.1, 0.5, 1.0] 
+COLOR_LIST  = {0.01:'m', 0.05:'g', 0.1:'b', 0.3:'m', 0.5:'k', 1.0:'y'} 
 #
 def max_plot(x_values, y_values, tag, filename):
     """
@@ -26,7 +26,7 @@ def max_plot(x_values, y_values, tag, filename):
     plt.xticks(range(len(x_values)), x_values)
     plt.ylabel('Maximum %s'%y_label[tag], fontsize=16)
     plt.xlabel('eps', fontsize=16)
-    #plt.show()
+    plt.show()
     #fig = plt.gcf()
     methods.file_create(filename)
     fig.savefig(filename, bbox_inches='tight')
@@ -106,6 +106,6 @@ if __name__ == '__main__':
         filename = 'results/figures/%s/S%s/DP/N%d/cdf_%s_DP_N%d_%s.pdf'%(NAME, str(SIZE), ITERATIONS_NB, NAME, ITERATIONS_NB, d_tag)
         methods.file_create(filename)
         fig.savefig(filename, bbox_inches='tight')
-        #plt.show()
+        plt.show()
         plt.close(fig)
     print 'Done!'
