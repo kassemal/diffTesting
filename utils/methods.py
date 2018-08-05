@@ -252,7 +252,7 @@ def table_write(table, filename):
     return 
 
 
-def predictions_write(predictions, predictions_w, sa_values, filename, mode='a'):
+def predictions_write(predictions, predictions_w, sa_values, filename, mode='w'):
     """
     Write $predictions and $predictions_w into $filename. 
     A line per record: $predictions[i] + $predictions_w[i]
