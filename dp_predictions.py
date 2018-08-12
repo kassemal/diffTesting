@@ -1,7 +1,7 @@
 """
-=====================================================================================
-Apply Differential Inference Testing on the results of differentially private queries
-=====================================================================================
+==============================================================================================================
+Apply Differential Inference Testing on the results of differentially private queries (Naive Bayes classifier)
+==============================================================================================================
 
 Differential privacy is different from generalization techniques, like k-anonymity and l-diversity, 
 in that it does not explicitly publish microdata. Instead, a user makes a query on the data, the 

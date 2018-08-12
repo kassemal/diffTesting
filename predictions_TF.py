@@ -145,7 +145,8 @@ if __name__ == '__main__':
 			#obtain a prediction distribution for distinct record i from the model M_w
 			predicted_distributions_w.append(model_M_w.predict_proba([input_record]).tolist()[0])
 		#print out the computation time in seconds
-		print 'Computation time in seconds:',  time.time() - time_start         #write obtained prediction into predictions_file, a record per line
+		print 'Computation time in seconds:',  time.time() - time_start         
+		#write obtained prediction into predictions_file, a record per line
 		filename_predictions = 'results/predictions/%s/S%s/%s/%s/TF/predictions_%s_%s_p%s'%(NAME, str(SIZE), ANON_TECH, MLA, NAME, ANON_TECH, str(p_value))
 		methods.table_write([predicted_distributions[l]+predicted_distributions_w[l] for l in range(len(predicted_distributions))], filename_predictions)
 	print 'Number of classes:%d'%len(classes_ref)

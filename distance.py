@@ -15,6 +15,7 @@ SIZE = 1000     #size of the dataset to consider
 ANON_TECH = 'k_anonymity' #anonymization technique 'k_anonymity', 'l_diversity', 'DP'
 MLA = 'BNB' # 'GNB'
 ENC_TECH = 'TF' #encoding technique 'TF' (True-False), 'OH' (one-hot) 
+#
 P_VALUES = [1, 2, 3, 5, 8] # Parameter used for anonymization
 COLOR_LIST  = {1:'b', 2:'r', 3:'g', 5:'y', 8:'m'}  
 #
@@ -72,7 +73,7 @@ if __name__ == '__main__':
         fig.savefig(filename_max_d, bbox_inches='tight')
         plt.close(fig)
         #
-        #plot cdf
+        #plot CRF
         curves, legend = [], []
         fig = plt.figure()  
         curves = [0 for x in range(len(P_VALUES))]
@@ -88,9 +89,9 @@ if __name__ == '__main__':
         plt.ylabel('Cumulative Relative Frequency', fontsize=16)  
         #plt.title('')
         fig = plt.gcf()
-        filename_cdf = 'results/figures/%s/S%s/%s/%s/%s/%s/cdf_%s_%s_%s.pdf'%(NAME, str(SIZE), ANON_TECH, MLA, ENC_TECH, d_tag, NAME, ANON_TECH, d_tag)
-        methods.file_create(filename_cdf)
-        fig.savefig(filename_cdf, bbox_inches='tight')
+        filename_crf = 'results/figures/%s/S%s/%s/%s/%s/%s/crf_%s_%s_%s.pdf'%(NAME, str(SIZE), ANON_TECH, MLA, ENC_TECH, d_tag, NAME, ANON_TECH, d_tag)
+        methods.file_create(filename_crf)
+        fig.savefig(filename_crf, bbox_inches='tight')
         plt.show()
         plt.close(fig)
     print 'Done!'

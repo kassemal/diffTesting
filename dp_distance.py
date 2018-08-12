@@ -9,29 +9,15 @@ from utils import methods
 
 DISTANCE_TAGS = ['EMD', 'm_ratio'] #distances to consider: EMD for Earth Mover Distance, and m_ratio for Maximal ratio
 NAME = 'adult'  #name of the dataset: 'adult', 'internet'
-NB_classes = 14 #make sure to use the correct number of classes. Maximum number for adult: 14, internet: 9 
-SIZE = 10000    #size of the dataset to consider
-ITERATIONS_NB = 1000 
+NB_classes = 13 #make sure to use the correct number of classes. Maximum number for adult: 14, internet: 9 
+SIZE = 1000    #size of the dataset to consider
+ITERATIONS_NB = 500 
 #
-P_VALUES = [0.01, 0.05, 0.1, 0.5, 1.0] 
-COLOR_LIST  = {0.01:'m', 0.05:'g', 0.1:'b', 0.3:'m', 0.5:'k', 1.0:'y'} 
+P_VALUES = [0.1, 0.3, 0.5, 1.0]
+COLOR_LIST  = {0.1:'m', 0.3:'g', 0.5:'r', 1.0:'b'} 
 #
-def max_plot(x_values, y_values, tag, filename):
-    """
-    plot $y_values with respect to $x_values and save the result in $filename. 
-    """
-    y_label = {'EMD':'EMD distance', 'm_ratio':'Ratio'}
-    fig = plt.figure()  
-    plt.plot(range(len(x_values)), y_values, '-x')
-    plt.xticks(range(len(x_values)), x_values)
-    plt.ylabel('Maximum %s'%y_label[tag], fontsize=16)
-    plt.xlabel('eps', fontsize=16)
-    plt.show()
-    #fig = plt.gcf()
-    methods.file_create(filename)
-    fig.savefig(filename, bbox_inches='tight')
-    plt.close(fig)
-    return
+y_label = {'EMD':'EMD distance', 'm_ratio':'Ratio'}
+x_label = {'EMD':'Earth Mover\'s Distance', 'm_ratio':'Maximal Ratio'}
 
 if __name__ == '__main__':
 
@@ -48,14 +34,10 @@ if __name__ == '__main__':
         f = open(filename_predictions, 'r')   
         for i,  line in enumerate(f):
             prob, prob_w = [], []
-            lline = line.split(' ')
-            for j in range(NB_classes):
-                prob.append(float(lline[j]))
-            predicted_distributions.append(prob)
+            line = line.split(' ')
+            predicted_distributions.append([float(line[j]) for j in range(NB_classes)])
             #
-            for j in range(NB_classes, 2*NB_classes):
-                prob_w.append(float(lline[j]))
-            predicted_distributions_w.append(prob_w)
+            predicted_distributions_w.append([float(line[j]) for j in range(NB_classes, 2*NB_classes)])
         f.close()
         #
         #Compute distances
@@ -63,23 +45,31 @@ if __name__ == '__main__':
             distances = []
             #for every distinct record, compute the distance between the corresponding prediction distributions
             for i in range(len(predicted_distributions)):
-                d = methods.distance_compute(predicted_distributions[i], predicted_distributions_w[i], NB_classes, d_tag)
-                distances.append(d)
+                distances.append(methods.distance_compute(predicted_distributions[i], predicted_distributions_w[i], NB_classes, d_tag))
             distances_dict[d_tag].append(distances)
             max_d[d_tag].append(max(distances))
-            filename = 'results/distances/%s/S%s/DP/N%d/distances_%s_DP_p%s_N%d_%s'%(NAME, str(SIZE), ITERATIONS_NB, NAME, str(p_value), ITERATIONS_NB, d_tag)
-            methods.file_create(filename)
-            f = open(filename, 'w')
+            filename_d = 'results/distances/%s/S%s/DP/N%d/distances_%s_DP_p%s_N%d_%s'%(NAME, str(SIZE), ITERATIONS_NB, NAME, str(p_value), ITERATIONS_NB, d_tag)
+            methods.file_create(filename_d)
+            f = open(filename_d, 'w')
             for line in distances:
                 f.write(str(line) + '\n')
             f.close()
 
-    #Plot the relative CDF of the distances  
+    #Plot  
     for d_tag in DISTANCE_TAGS:
         #plot max. distances
-        max_dfile = 'results/figures/%s/S%s/DP/N%d/max_d_%s_DP_N%d_%s.pdf'%(NAME, str(SIZE), ITERATIONS_NB, NAME, ITERATIONS_NB, d_tag)
-        max_plot(P_VALUES, max_d[d_tag], d_tag, max_dfile)
-        #plot cdf
+        filename_max_d = 'results/figures/%s/S%s/DP/N%d/max_d_%s_DP_N%d_%s.pdf'%(NAME, str(SIZE), ITERATIONS_NB, NAME, ITERATIONS_NB, d_tag)
+        fig = plt.figure()  
+        plt.plot(range(len(P_VALUES)), max_d[d_tag], '-x')
+        plt.xticks(range(len(P_VALUES)), P_VALUES)
+        plt.ylabel('Maximum %s'%y_label[d_tag], fontsize=16)
+        plt.xlabel('eps', fontsize=16)
+        plt.show()
+        #fig = plt.gcf()
+        methods.file_create(filename_max_d)
+        fig.savefig(filename_max_d, bbox_inches='tight')
+        plt.close(fig)
+        #plot crf
         curves, legend = [], []
         fig = plt.figure()  
         curves = [0 for x in range(len(P_VALUES))]
@@ -90,22 +80,15 @@ if __name__ == '__main__':
             yvals = np.arange(1,  size+1)/float(size)
             curves[i],  = plt.semilogx(np.sort(d_list), yvals, COLOR_LIST[P_VALUES[i]], label=P_VALUES[i])
         plt.legend(curves, legend, loc=0, fontsize=12, frameon=False)
-        #
-        label_x = ''
-        if d_tag == 'EMD':
-            label_x = 'Earth Mover\'s Distance'
-            #plt.xlim(10**-1, 10**0)
-        elif d_tag == 'm_ratio':
-            label_x = 'Maximal Ratio'
-            #plt.xlim()
-            #plt.xticks()
-        plt.xlabel('%s'%label_x, fontsize=16)
+        #plt.xlim()
+        #plt.xticks()
+        plt.xlabel('%s'%x_label[d_tag], fontsize=16)
         plt.ylabel('Cumulative Relative Frequency', fontsize=16)  
         #plt.title('')
         fig = plt.gcf()
-        filename = 'results/figures/%s/S%s/DP/N%d/cdf_%s_DP_N%d_%s.pdf'%(NAME, str(SIZE), ITERATIONS_NB, NAME, ITERATIONS_NB, d_tag)
-        methods.file_create(filename)
-        fig.savefig(filename, bbox_inches='tight')
+        filename_crf = 'results/figures/%s/S%s/DP/N%d/crf_%s_DP_N%d_%s.pdf'%(NAME, str(SIZE), ITERATIONS_NB, NAME, ITERATIONS_NB, d_tag)
+        methods.file_create(filename_crf)
+        fig.savefig(filename_crf, bbox_inches='tight')
         plt.show()
         plt.close(fig)
     print 'Done!'
