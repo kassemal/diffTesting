@@ -167,6 +167,6 @@ if __name__ == '__main__':
 		#write/append obtained prediction into $predictions_filename
 		predictions_filename = 'results/predictions/%s/S%s/DP/N%d/predictions_%s_DP_p%s'%(NAME, str(SIZE), ITERATIONS_NB, NAME, str(epsilon))
 		methods.predictions_write(predicted_distributions_i, predicted_distributions_i_w, sa_values, predictions_filename, mode='w')
-    print 'Number of classes:%d'%len(sa_values)
+	print 'Number of classes:%d'%len(sa_values)
 	print 'Done!'
 	
