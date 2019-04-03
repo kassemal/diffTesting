@@ -1,0 +1,10 @@
+Masters;Uni;*
+Some-College;Uni;*
+College;Uni;*
+Doctoral;Uni;*
+Grammar;School;*
+High-School;School;*
+Professional;Prof;*
+Special;Prof;*
+Other;*
+

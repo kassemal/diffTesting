@@ -1,0 +1,8 @@
+White;Light-Skin;*
+Asian;Light-Skin;*
+Latino;Latin-American;Dark-Sking;*
+Hispanic;Latin-American;Dark-Sking;*
+Indigenous;Dark-Sking;*
+Black;Dark-Sking;*
+Not-Say;Unknown;*
+Other;Unknown;*
