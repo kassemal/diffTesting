@@ -1,5 +1,0 @@
-White;White-black;*
-Asian-Pac-Islander;Others;*
-Amer-Indian-Eskimo;Others;*
-Other;Others;*
-Black;White-black;*

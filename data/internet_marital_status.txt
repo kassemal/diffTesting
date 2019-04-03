@@ -1,8 +1,0 @@
-Married;*
-Single;Alone;*
-Divorced;Independent;*
-Separated;Independent;*
-Widowed;Alone;*
-Other;Unknown;*
-Not-Say;Unknown;*
-
